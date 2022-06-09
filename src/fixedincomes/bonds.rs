@@ -1,6 +1,4 @@
-pub mod derivatives;
-pub mod fixedincomes;
-pub mod statements;
+pub mod rates;
 
 #[cfg(test)]
 mod tests {
