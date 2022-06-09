@@ -9,3 +9,5 @@ edition = "2021"
 chrono = { version = "*" }
 ndarray = { version = "*" }
 ndarray-stats = { version = "*" }
+nalgebra = { version = "*" }
+argmin = { version = "*" }
