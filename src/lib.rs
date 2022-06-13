@@ -17,7 +17,7 @@ pub mod derivatives;
 pub mod fixedincomes;
 pub mod statements;
 
-use chrono::{naive::NaiveDate, Duration};
+use chrono::{naive::NaiveDate as NDt, Duration};
 
 /** Day difference (d1 - d0) in fraction of a year
 - d0 = start date
@@ -26,7 +26,7 @@ use chrono::{naive::NaiveDate, Duration};
 This function is similar to its counterpart in MS Excel except it divides the day
 by 365.25 instead of more complicated rules followed in Excel.
 */
-pub fn yearfrac(d0: NaiveDate, d1: NaiveDate) -> f64 {
+pub fn yearfrac(d0: NDt, d1: NDt) -> f64 {
     (d1.signed_duration_since(d0).num_days() as f64) / 365.25
 }
 
@@ -34,7 +34,7 @@ pub fn yearfrac(d0: NaiveDate, d1: NaiveDate) -> f64 {
 - d0 = Date from which to calculate.
 - yf = Year Fraction as f64.
 */
-pub fn inv_yearfrac(d0: NaiveDate, yf: f64) -> NaiveDate {
+pub fn inv_yearfrac(d0: NDt, yf: f64) -> NDt {
     d0 + Duration::days((yf * 365.25).round() as i64)
 }
 
@@ -58,7 +58,7 @@ pub fn dis_fact(r: f64, n: f64) -> f64 {
 - d0 = begin date
 - d1 = end date
 */
-pub fn xdis_fact(r: f64, d0: NaiveDate, d1: NaiveDate) -> f64 {
+pub fn xdis_fact(r: f64, d0: NDt, d1: NDt) -> f64 {
     1.0 / (1.0 + r).powf(yearfrac(d0, d1))
 }
 
@@ -118,7 +118,7 @@ pub fn fv(pv: f64, r: f64, n: f64) -> f64 {
     pv * (1.0 + r).powf(n)
 }
 
-/** FV of a Future cash flow with multiple compounding per period`
+/** FV of a Future cash flow with multiple compounding per period
 - pv = Present cash flow
 - r  = rate of return
 - n  = number of periods
@@ -155,7 +155,7 @@ pub fn pv_annuity(pmt: f64, r: f64, n: f64, m: f64) -> f64 {
     pmt / (r / m) * (1.0 - 1.0 / (1.0 + r / m).powf(n * m))
 }
 
-/** Payment to cover the PV of an Annuity`
+/** Payment to cover the PV of an Annuity
 - pv = PV of Annuity
 - r  = rate of return
 - n  = number of periods (say, years)
@@ -204,7 +204,24 @@ pub fn approx(x: f64, y: f64) -> bool {
     mx < 1e-8 || (x - y).abs() / mx < 1e-6
 }
 
-/** NPV of cash flows against time given in periods`
+/** NPV of cash flows against time given in periods @ time = 0.0
+- r   = rate of return across the periods
+- tim = vector of time of cash flows given as Float64
+- cf  = vector of corresponding cash flows
+
+```
+let r   = 0.08;
+let tim = vec![0.25, 6.25, 3.5, 4.5, 1.25];
+let cf  = vec![-6.25, 1.2, 1.25, 3.6, 2.5];
+assert_eq!(financelib::npv_t0(r, &tim, &cf), 0.3826480347907877);
+```
+*/
+pub fn npv_t0(mut r: f64, tim: &Vec<f64>, cf: &Vec<f64>) -> f64 {
+    r += 1.0;
+    tim.iter().zip(cf).map(|(&t, c)| c / r.powf(t)).sum::<f64>()
+}
+
+/** NPV of cash flows against time given in periods @ time = t0
 - r   = rate of return across the periods
 - tim = vector of time of cash flows given as Float64
 - cf  = vector of corresponding cash flows
@@ -218,12 +235,73 @@ let t0  = -0.45;
 assert_eq!(financelib::npv(r, &tim, &cf, t0), 0.36962283798505946);
 ```
 */
-pub fn npv(mut r: f64, tim: &Vec<f64>, cf: &Vec<f64>, t0: f64) -> f64 {
-    r += 1.0;
-    (tim.iter().zip(cf).map(|(&t, c)| c / r.powf(t)).sum::<f64>()) * r.powf(t0)
+pub fn npv(r: f64, tim: &Vec<f64>, cf: &Vec<f64>, t0: f64) -> f64 {
+    npv_t0(r, tim, cf) * (1.0 + r).powf(t0)
 }
 
-#[allow(dead_code)]
+/** NPV of cash flows against time given by Date
+- r   = rate of return across the years
+- dt  = vector of time of cash flows given as Date
+- cf  = vector of corresponding cash flows
+- d0  = Date at which the NPV is sought.
+```
+use chrono::NaiveDate as NDt;
+
+let r   = 0.08;
+let dt  = vec![
+    NDt::from_ymd(2012, 2, 25),
+    NDt::from_ymd(2012, 6, 28),
+    NDt::from_ymd(2013, 2, 15),
+    NDt::from_ymd(2014, 9, 18),
+    NDt::from_ymd(2015, 2, 20)
+];
+let cf  = vec![-15.0, 5.0, 25.0, -10.0, 50.0];
+let d0  = NDt::from_ymd(2012, 1, 10);
+assert_eq!(financelib::xnpv(r, &dt, &cf, d0), 44.15557928534869);
+```
+*/
+pub fn xnpv(r: f64, dt: &Vec<NDt>, cf: &Vec<f64>, d0: NDt) -> f64 {
+    let tim = dt.iter().map(|&d| yearfrac(d0, d)).collect();
+    npv_t0(r, &tim, cf)
+}
+
+/** IRR of cash flow against time given in periods
+- tim = vector of time of cash flows given as Float64
+- cf  = vector of corresponding cash flows
+```
+let tim = vec![0.125, 0.29760274, 0.49760274, 0.55239726, 0.812671233];
+let cf  = vec![-10.25, -2.5, 3.5, 9.5, 1.25];
+let cf1 = vec![10.25, 2.5, 3.5, 9.5, 1.25];
+assert_eq!(financelib::irr(&tim, &cf), Some(0.31813386475187844));
+assert_eq!(financelib::irr(&tim, &cf1), None);
+```
+*/
+pub fn irr(tim: &Vec<f64>, cf: &Vec<f64>) -> Option<f64> {
+    newt_raph(|r| npv_t0(r, tim, cf), 0.1, 1e-6)
+}
+
+/** IRR of cash flow against time given as NaiveDate
+- tim = vector of time of cash flows given as Float64
+- cf  = vector of corresponding cash flows
+```
+use chrono::NaiveDate as NDt;
+
+let dt = vec![
+    NDt::from_ymd(2012, 2, 25),
+    NDt::from_ymd(2012, 6, 28),
+    NDt::from_ymd(2013, 2, 15),
+    NDt::from_ymd(2014, 9, 18),
+    NDt::from_ymd(2015, 2, 20)
+];
+let cf  = vec![-115.0, 5.0, 25.0, -10.0, 200.0];
+assert_eq!(financelib::xirr(&dt, &cf), Some(0.27831660293063537));
+```
+*/
+pub fn xirr(dt: &Vec<NDt>, cf: &Vec<f64>) -> Option<f64> {
+    let tim = dt.iter().map(|&d| yearfrac(dt[0], d)).collect();
+    irr(&tim, cf)
+}
+
 fn newt_raph(f: impl Fn(f64) -> f64, mut x: f64, xtol: f64) -> Option<f64> {
     let mut dx: f64;
     let del_x = xtol / 10.0;
@@ -244,19 +322,15 @@ mod tests {
 
     #[test]
     fn time_value() {
-        let d0 = NaiveDate::from_ymd(2027, 2, 12);
-        let d1 = NaiveDate::from_ymd(2018, 2, 12);
+        let d0 = NDt::from_ymd(2027, 2, 12);
+        let d1 = NDt::from_ymd(2018, 2, 12);
         let yf = -8.999315537303216;
         assert_eq!(yearfrac(d0, d1), yf);
         assert_eq!(inv_yearfrac(d1, -yf), d0);
         assert_eq!(dis_fact_annual(0.07), 0.9345794392523364);
         assert_eq!(dis_fact(0.09, 3.0), 0.7721834800610642);
         assert_eq!(
-            xdis_fact(
-                0.09,
-                NaiveDate::from_ymd(2015, 3, 15),
-                NaiveDate::from_ymd(2018, 10, 8)
-            ),
+            xdis_fact(0.09, NDt::from_ymd(2015, 3, 15), NDt::from_ymd(2018, 10, 8)),
             0.7353328680759499
         );
         assert_eq!(fwd_dis_fact((0.07, 1.0), (0.09, 3.0)), 0.8262363236653387);
@@ -299,6 +373,48 @@ mod tests {
                 -0.45
             ),
             0.36962283798505946
+        );
+        assert_eq!(
+            irr(
+                &vec![0.125, 0.29760274, 0.49760274, 0.55239726, 0.812671233],
+                &vec![-10.25, -2.5, 3.5, 9.5, 1.25]
+            ),
+            Some(0.31813386475187844)
+        );
+        assert_eq!(
+            irr(
+                &vec![0.125, 0.29760274, 0.49760274, 0.55239726, 0.812671233],
+                &vec![10.25, 2.5, 3.5, 9.5, 1.25]
+            ),
+            None
+        );
+        assert_eq!(
+            xnpv(
+                0.08,
+                &vec![
+                    NDt::from_ymd(2012, 2, 25),
+                    NDt::from_ymd(2012, 6, 28),
+                    NDt::from_ymd(2013, 2, 15),
+                    NDt::from_ymd(2014, 9, 18),
+                    NDt::from_ymd(2015, 2, 20)
+                ],
+                &vec![-15.0, 5.0, 25.0, -10.0, 50.0],
+                NDt::from_ymd(2012, 1, 10)
+            ),
+            44.15557928534869
+        );
+        assert_eq!(
+            xirr(
+                &vec![
+                    NDt::from_ymd(2012, 2, 25),
+                    NDt::from_ymd(2012, 6, 28),
+                    NDt::from_ymd(2013, 2, 15),
+                    NDt::from_ymd(2014, 9, 18),
+                    NDt::from_ymd(2015, 2, 20)
+                ],
+                &vec![-115.0, 5.0, 25.0, -10.0, 200.0]
+            ),
+            Some(0.27831660293063537)
         );
     }
 }
