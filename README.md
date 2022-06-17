@@ -3,7 +3,9 @@
 ## Motivation
 The library was created to be a reasonably complete package for all major financial formulas used in Finance. The codes are all in *pure* Rust. It encompasses most of the common area of *Finance* - *Accounts, Balance Sheets, Equity, Bonds, Derivatives, Free Cash Flows, Valuations etc*
 
-The project is currently in *work-in-progress (WIP) stage* and it is *strongly advised **not*** to use it.  
+Unless otherwise mentioned, the *Actual/Actual* day-convention is used for all formulas. 
+
+The project is currently in *work-in-progress (WIP) stage* and it is *strongly advised **not*** to use it.
 
 ## Features
 The library exports a base module **financelib** and all domains in Finance are exported as submodule of the same. 
