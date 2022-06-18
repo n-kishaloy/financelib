@@ -18,14 +18,14 @@ pub mod fixedincomes;
 pub mod statements;
 
 use chrono::{naive::NaiveDate as NDt, Datelike};
-use time::util::days_in_year;
+use time::util::{days_in_year, is_leap_year};
 use DayCountConvention::*;
 
 /**
 Converts a date to a f64 float with 1(One) year represented by 1.0
 */
 pub fn date_to_float(dt: NDt) -> f64 {
-    let (yr, ds) = (dt.year(), dt.ordinal0() as f64);
+    let (yr, ds) = (dt.year(), dt.ordinal() as f64);
     yr as f64 + ds / days_in_year(yr) as f64
 }
 
@@ -33,9 +33,9 @@ pub fn date_to_float(dt: NDt) -> f64 {
 Converts a float to a NaiveDate with 1(One) year represented by 1.0
 */
 pub fn date_from_float(yr: f64) -> NDt {
-    let y = yr.floor();
+    let y = (yr - 0.00274).floor();
     let yp = y as i32;
-    NDt::from_yo(yp, ((yr - y) * days_in_year(yp) as f64) as u32)
+    NDt::from_yo(yp, ((yr - y) * days_in_year(yp) as f64).round() as u32)
 }
 
 /**
@@ -67,7 +67,7 @@ Following methods are supported
 - ACT365 => Actual nos of days / 365
 */
 pub fn yearfrac(dt0: NDt, dt1: NDt, basis: DayCountConvention) -> f64 {
-    fn days360(y0: i32, m0: i32, d0: i32, y1: i32, m1: i32, d1: i32) -> f64 {
+    fn day_count_factor(y0: i32, m0: i32, d0: i32, y1: i32, m1: i32, d1: i32) -> f64 {
         ((y1 - y0) + (m1 - m0) * 30 + (d1 - d0) * 360) as f64 / 360.0
     }
 
@@ -79,9 +79,26 @@ pub fn yearfrac(dt0: NDt, dt1: NDt, basis: DayCountConvention) -> f64 {
             let (y0, m0, d0) = (dt0.year(), dt0.month() as i32, dt0.day() as i32);
             let (y1, m1, d1) = (dt1.year(), dt1.month() as i32, dt1.day() as i32);
             let lastday = |d| if d == 31 { 30 } else { d };
-            days360(y0, m0, lastday(d0), y1, m1, lastday(d1))
+            day_count_factor(y0, m0, lastday(d0), y1, m1, lastday(d1))
         }
-        US30360 => panic!("yearfrac for US 30/360 or NASD 30/360 not implemented"),
+        US30360 => {
+            let (y0, m0, mut d0) = (dt0.year(), dt0.month() as i32, dt0.day() as i32);
+            let (y1, m1, mut d1) = (dt1.year(), dt1.month() as i32, dt1.day() as i32);
+            let lsfeb = |d, m, y| m == 2 && if is_leap_year(y) { d == 29 } else { d == 28 };
+            if lsfeb(d0, m0, y0) {
+                if lsfeb(d1, m1, y1) {
+                    d1 = 30;
+                };
+                d0 = 30;
+            };
+            if d1 == 31 && d0 >= 30 {
+                d1 = 30;
+            };
+            if d0 == 31 {
+                d0 = 30;
+            };
+            day_count_factor(y0, m0, d0, y1, m1, d1)
+        }
     }
 }
 
@@ -374,7 +391,7 @@ mod tests {
                 &vec![-15.0, 5.0, 25.0, -10.0, 50.0],
                 NDt::from_ymd(2012, 1, 10)
             ),
-            44.160146047676406
+            44.16011482812257
         );
         assert_eq!(
             xirr(
@@ -387,7 +404,7 @@ mod tests {
                 ],
                 &vec![-115.0, 5.0, 25.0, -10.0, 200.0]
             ),
-            Some(0.27838060175657886)
+            Some(0.27837971897636116)
         );
     }
 }
