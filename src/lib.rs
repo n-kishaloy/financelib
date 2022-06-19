@@ -318,7 +318,7 @@ fn newt_raph(f: impl Fn(f64) -> f64, mut x: f64, xtol: f64) -> Option<f64> {
 }
 
 #[cfg(test)]
-mod tests {
+mod base_fn {
     use super::*;
 
     #[test]

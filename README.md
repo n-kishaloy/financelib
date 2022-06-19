@@ -3,7 +3,7 @@
 ## Motivation
 The library was created to be a reasonably complete package for all major financial formulas used in Finance. The codes are all in *pure* Rust. It encompasses most of the common area of *Finance* - *Accounts, Balance Sheets, Equity, Bonds, Derivatives, Free Cash Flows, Valuations etc*
 
-Unless otherwise mentioned, the *Actual/Actual* day-convention is used for all formulas. 
+Unless otherwise mentioned, the *US 30/360* day-convention is used for all formulas. This is the default option in MS Excel. 
 
 The project is currently in *work-in-progress (WIP) stage* and it is *strongly advised **not*** to use it.
 
