@@ -65,10 +65,14 @@ Following methods are supported
 - ACTACT => (Days in Leap year) / 366 + (Days in Normal year) / 365
 - ACT360 => Actual nos of days / 360
 - ACT365 => Actual nos of days / 365
+
+Note that the ACTACT formula is different from MS Excel and follows the Actual/Actual ISDA rule. For more details refer <https://en.wikipedia.org/wiki/Day_count_convention>.
+
+The yearfrac function is also signed with the result coming as negative in case dt0 > dt1. This is different from MS Excel, where the yearfrac number return absolute difference between the dates. Use abs() at end to replicate the same.
 */
 pub fn yearfrac(dt0: NDt, dt1: NDt, basis: DayCountConvention) -> f64 {
     fn day_count_factor(y0: i32, m0: i32, d0: i32, y1: i32, m1: i32, d1: i32) -> f64 {
-        ((y1 - y0) + (m1 - m0) * 30 + (d1 - d0) * 360) as f64 / 360.0
+        ((y1 - y0) * 360 + (m1 - m0) * 30 + (d1 - d0)) as f64 / 360.0
     }
 
     match basis {
@@ -326,6 +330,102 @@ mod tests {
             0.735351643874192
         );
         assert_eq!(fwd_dis_fact((0.07, 1.0), (0.09, 3.0)), 0.8262363236653387);
+    }
+
+    #[test]
+    fn yearfrac_calc() {
+        let dts = vec![
+            (&NDt::from_ymd(2018, 2, 5), &NDt::from_ymd(2023, 5, 14)),
+            (&NDt::from_ymd(2020, 2, 29), &NDt::from_ymd(2024, 2, 28)),
+            (&NDt::from_ymd(2015, 8, 30), &NDt::from_ymd(2010, 3, 31)),
+            (&NDt::from_ymd(2016, 2, 28), &NDt::from_ymd(2016, 10, 30)),
+            (&NDt::from_ymd(2014, 1, 31), &NDt::from_ymd(2014, 8, 31)),
+            (&NDt::from_ymd(2014, 2, 28), &NDt::from_ymd(2014, 9, 30)),
+            (&NDt::from_ymd(2016, 2, 29), &NDt::from_ymd(2016, 6, 15)),
+        ]
+        .iter()
+        .map(|(&dt0, &dt1)| {
+            (
+                yearfrac(dt0, dt1, US30360),
+                yearfrac(dt0, dt1, ACTACT),
+                yearfrac(dt0, dt1, ACT360),
+                yearfrac(dt0, dt1, ACT365),
+                yearfrac(dt0, dt1, EU30360),
+            )
+        })
+        .collect::<Vec<_>>();
+
+        // println!("{:?}", dts[6]);
+        assert!(
+            dts[0]
+                == (
+                    5.27500000000000,
+                    5.26849315068489,
+                    5.34444444444444444,
+                    5.271232876712329,
+                    5.27500000000000
+                )
+        );
+        assert!(
+            dts[1]
+                == (
+                    3.9944444444444444444444,
+                    3.9972677595626465,
+                    4.0555555555555555555555,
+                    4.00000000000000,
+                    3.99722222222222222222222
+                )
+        );
+        assert!(
+            dts[2]
+                == (
+                    -5.4166666666666666666,
+                    -5.4164383561642350000,
+                    -5.4944444444444444444,
+                    -5.4191780821917810000,
+                    -5.4166666666666666666
+                )
+        );
+        assert!(
+            dts[3]
+                == (
+                    0.6722222222222222222,
+                    0.6693989071038686000,
+                    0.6805555555555555555,
+                    0.6712328767123288000,
+                    0.6722222222222222222
+                )
+        );
+        assert!(
+            dts[4]
+                == (
+                    0.5833333333333333333,
+                    0.5808219178084073000,
+                    0.5888888888888888888,
+                    0.5808219178082191000,
+                    0.5833333333333333333
+                )
+        );
+        assert!(
+            dts[5]
+                == (
+                    0.5833333333333333333,
+                    0.5863013698631221000,
+                    0.5944444444444444444,
+                    0.5863013698630137000,
+                    0.5888888888888888888
+                )
+        );
+        assert!(
+            dts[6]
+                == (
+                    0.2916666666666666666,
+                    0.2923497267759103000,
+                    0.2972222222222222222,
+                    0.2931506849315068700,
+                    0.2944444444444444444
+                )
+        );
     }
 
     #[test]
