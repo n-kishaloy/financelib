@@ -246,6 +246,22 @@ pub fn eff_exp_rate(r: f64) -> f64 {
     (1.0 + r).ln()
 }
 
+/** Nominal rate to exponential rate
+- r = effective rate
+- m = number of compounding per period
+*/
+pub fn nom_exp_rate(r: f64, m: f64) -> f64 {
+    eff_exp_rate(nom_eff_rate(r, m))
+}
+
+/** Exponential rate to nominal rate
+- r = effective rate
+- m = number of compounding per period
+*/
+pub fn exp_nom_rate(r: f64, m: f64) -> f64 {
+    eff_nom_rate(exp_eff_rate(r), m)
+}
+
 /** Easy-to-use reasonable way of emulating approx
 - x = first variable
 - y = second variable
@@ -303,7 +319,7 @@ pub fn xirr(dt: &Vec<NDt>, cf: &Vec<f64>) -> Option<f64> {
     irr(&tim, cf)
 }
 
-fn newt_raph(f: impl Fn(f64) -> f64, mut x: f64, xtol: f64) -> Option<f64> {
+pub fn newt_raph(f: impl Fn(f64) -> f64, mut x: f64, xtol: f64) -> Option<f64> {
     let mut dx: f64;
     let del_x = xtol / 10.0;
     for _ in 0..100 {
@@ -444,6 +460,9 @@ mod base_fn {
     fn rates_calc() {
         assert!(approx(nom_eff_rate(0.08, 2.0), 0.0816));
         assert!(approx(nom_eff_rate(eff_nom_rate(0.08, 4.0), 4.0), 0.08));
+        assert!(approx(nom_exp_rate(0.08, 2.0), 0.07844142630656266));
+        assert!(approx(exp_nom_rate(nom_exp_rate(0.08, 2.0), 2.0), 0.08));
+        assert!(approx(eff_nom_rate(nom_eff_rate(0.08, 2.0), 2.0), 0.08));
     }
 
     #[test]

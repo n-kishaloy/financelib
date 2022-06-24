@@ -1,10 +1,11 @@
 /*!
-Module      : FinanceLib.FixedIncomes
-Description : Implement Fixed Incomes modules for the FinanceLib library
-Copyright   : (c) 2022 Kishaloy Neogi
-License     : MIT
-Maintainer  : Kishaloy Neogi
-Email       : nkishaloy@yahoo.com
+Module      : financelib::fixedincomes <br>
+Description : Implement Fixed Incomes modules for the FinanceLib library <br>
+
+Copyright   : (c) 2022 Kishaloy Neogi <br>
+License     : MIT <br>
+Maintainer  : Kishaloy Neogi <br>
+Email       : nkishaloy@yahoo.com <br>
 
 The module describes the base modules of FixedIncomes.
 
