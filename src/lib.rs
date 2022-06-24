@@ -127,7 +127,7 @@ pub fn dis_fact(r: f64, n: f64) -> f64 {
 - d1 = end date
 */
 pub fn xdis_fact(r: f64, d0: NDt, d1: NDt) -> f64 {
-    1.0 / (1.0 + r).powf(yearfrac(d0, d1, ACTACT))
+    1.0 / (1.0 + r).powf(yearfrac(d0, d1, US30360))
 }
 
 /** fwd_dis_fact((r0,t0), (r1,t1)) <br>
@@ -282,7 +282,7 @@ pub fn npv(r: f64, tim: &Vec<f64>, cf: &Vec<f64>, t0: f64) -> f64 {
 - d0  = Date at which the NPV is sought.
 */
 pub fn xnpv(r: f64, dt: &Vec<NDt>, cf: &Vec<f64>, d0: NDt) -> f64 {
-    let tim = dt.iter().map(|&d| yearfrac(d0, d, ACTACT)).collect();
+    let tim = dt.iter().map(|&d| yearfrac(d0, d, US30360)).collect();
     npv_t0(r, &tim, cf)
 }
 
@@ -299,7 +299,7 @@ pub fn irr(tim: &Vec<f64>, cf: &Vec<f64>) -> Option<f64> {
 - cf  = vector of corresponding cash flows
 */
 pub fn xirr(dt: &Vec<NDt>, cf: &Vec<f64>) -> Option<f64> {
-    let tim = dt.iter().map(|&d| yearfrac(dt[0], d, ACTACT)).collect();
+    let tim = dt.iter().map(|&d| yearfrac(dt[0], d, US30360)).collect();
     irr(&tim, cf)
 }
 
@@ -327,7 +327,7 @@ mod base_fn {
         assert_eq!(dis_fact(0.09, 3.0), 0.7721834800610642);
         assert_eq!(
             xdis_fact(0.09, NDt::from_ymd(2015, 3, 15), NDt::from_ymd(2018, 10, 8)),
-            0.735351643874192
+            0.7355566392384189
         );
         assert_eq!(fwd_dis_fact((0.07, 1.0), (0.09, 3.0)), 0.8262363236653387);
     }
@@ -491,7 +491,7 @@ mod base_fn {
                 &vec![-15.0, 5.0, 25.0, -10.0, 50.0],
                 NDt::from_ymd(2012, 1, 10)
             ),
-            44.16011482812257
+            44.165773653310936
         );
         assert_eq!(
             xirr(
@@ -504,7 +504,7 @@ mod base_fn {
                 ],
                 &vec![-115.0, 5.0, 25.0, -10.0, 200.0]
             ),
-            Some(0.27837971897636116)
+            Some(0.27845538159261773)
         );
     }
 }

@@ -19,11 +19,11 @@ pub enum RateCurve {
 }
 
 impl RateCurve {
-    pub fn estimate_r(&self, y: f64) -> f64 {
+    pub fn rate_estim(&self, y: f64) -> f64 {
         fn estima(rx: &Vec<f64>, fq: f64, y: f64) -> f64 {
             let pt = y * fq;
             let fl = pt.floor();
-            let f0 = fl as usize;
+            let f0 = fl as usize - 1;
             let pf = pt - fl;
             if pf < 1e-9 {
                 rx[f0]
@@ -37,13 +37,39 @@ impl RateCurve {
             Self::ExponentialRateCurve { rate, freq } => estima(rate, *freq, y),
         }
     }
+
+    pub fn pv(&self, c: f64, tim: f64) -> f64 {
+        let rate = self.rate_estim(tim);
+        match self {
+            Self::NominalRateCurve { rate: _, freq } => crate::pvm(c, rate, tim, *freq),
+            Self::EffectiveRateCurve { rate: _, freq: _ } => crate::pv(c, rate, tim),
+            Self::ExponentialRateCurve { rate: _, freq: _ } => crate::pvc(c, rate, tim),
+        }
+    }
 }
 
 #[cfg(test)]
-mod tests {
+mod rate_fn {
+    use super::*;
+    use RateCurve::*;
+
     #[test]
-    fn it_works() {
-        let result = 2 + 2;
-        assert_eq!(result, 4);
+    fn rate_curves() {
+        assert_eq!(
+            NominalRateCurve {
+                rate: vec![0.05, 0.06, 0.07, 0.08],
+                freq: 2.0
+            }
+            .rate_estim(1.5),
+            0.07
+        );
+        assert_eq!(
+            NominalRateCurve {
+                rate: vec![0.05, 0.06, 0.07, 0.08],
+                freq: 2.0
+            }
+            .rate_estim(1.2),
+            0.064
+        );
     }
 }
