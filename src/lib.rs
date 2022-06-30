@@ -1,10 +1,11 @@
 /*!
+Implement Base modules for the FinanceLib library
+
 Module      : financelib <br>
-Description : Implement Base modules for the FinanceLib library <br>
 Copyright   : (c) 2022 Kishaloy Neogi <br>
 License     : MIT <br>
 Maintainer  : Kishaloy Neogi <br>
-Email       : <nkishaloy@yahoo.com> <br>
+Email       : <nkishaloy@yahoo.com>
 
 The module describes the base modules of Finance like npv,xnpv,irr,xirr,time value of money etc.
 

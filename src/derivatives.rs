@@ -1,10 +1,11 @@
 /*!
+Implement Derivatives modules for the financelib library
+
 Module      : financelib::derivatives <br>
-Description : Implement Derivatives modules for the financelib library <br>
 Copyright   : (c) 2022 Kishaloy Neogi <br>
 License     : MIT <br>
 Maintainer  : Kishaloy Neogi <br>
-Email       : nkishaloy@yahoo.com <br>
+Email       : <nkishaloy@yahoo.com>
 
 The module describes the base modules of Derivatives like .
 You may see the github repository at <https://github.com/n-kishaloy/financelib>

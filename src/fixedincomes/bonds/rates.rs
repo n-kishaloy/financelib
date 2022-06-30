@@ -1,17 +1,31 @@
 /*!
-Module      : financeLib::fixedincomes::rates <br>
-Description : Implement Fixed Incomes Rates modules for the FinanceLib library
+Implement Fixed Incomes Rates modules for the FinanceLib library
 
+Module      : financeLib::fixedincomes::rates <br>
 Copyright   : (c) 2022 Kishaloy Neogi <br>
 License     : MIT <br>
 Maintainer  : Kishaloy Neogi <br>
-Email       : nkishaloy@yahoo.com <br>
+Email       : <nkishaloy@yahoo.com>
 
 The module describes the base modules of Fixed Incomes Rates.
 
 You may see the github repository at <https://github.com/n-kishaloy/financelib>
 */
 
+/**
+RateCurve defines Enum for different type of Rates (Nominal, Effective, Exponential)
+given as curve.
+
+RateCurve tracked rates which varies over a period and is given as a periodic in terms
+of Rates given in regular intervals. It can be of 3 types:
+- NominalRateCurve
+- EffectiveRateCurve
+- ExponentialRateCurve
+
+Each type has 2 fields
+- rate  = Vector of rates
+- freq  = freq at which the rates are being given per period.
+ */
 #[derive(Debug, Clone)]
 pub enum RateCurve {
     NominalRateCurve { rate: Vec<f64>, freq: f64 },
@@ -20,6 +34,10 @@ pub enum RateCurve {
 }
 
 impl RateCurve {
+    /**
+    Estimate the rate at a particular time by interpolating between the rate curves points
+    - y = the time given as period whose rate is being sought.
+     */
     pub fn rate_estim(&self, y: f64) -> f64 {
         fn estima(rx: &Vec<f64>, fq: f64, y: f64) -> f64 {
             let pt = y * fq;
@@ -39,6 +57,11 @@ impl RateCurve {
         }
     }
 
+    /**
+    The Present Value of a cash flow at a particular time.
+    - c     = cash flow
+    - tim   = time in period at which the cash flow occurs.
+     */
     pub fn pv(&self, c: f64, tim: f64) -> f64 {
         let rate = self.rate_estim(tim);
         match self {
@@ -48,6 +71,9 @@ impl RateCurve {
         }
     }
 
+    /**
+    Convert the RateCurve to a curve with Nominal rates
+     */
     pub fn convert_nominal(&self) -> RateCurve {
         match self {
             Self::EffectiveRateCurve { rate, freq } => RateCurve::NominalRateCurve {
@@ -68,6 +94,9 @@ impl RateCurve {
         }
     }
 
+    /**
+    Convert the RateCurve to a curve with Effective rates
+     */
     pub fn convert_effective(&self) -> RateCurve {
         match self {
             Self::NominalRateCurve { rate, freq } => RateCurve::EffectiveRateCurve {
@@ -85,6 +114,9 @@ impl RateCurve {
         }
     }
 
+    /**
+    Convert the RateCurve to a curve with Exponential rates
+     */
     pub fn convert_exponential(&self) -> RateCurve {
         match self {
             Self::NominalRateCurve { rate, freq } => RateCurve::ExponentialRateCurve {

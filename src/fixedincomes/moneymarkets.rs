@@ -1,10 +1,11 @@
 /*!
+Implement money market formulas for the financeLib library
+
 Module      : financelib::fixedincomes::moneymarkets <br>
-Description : Implement money market formulas for the financeLib library <br>
 Copyright   : (c) 2022 Kishaloy Neogi <br>
 License     : MIT <br>
 Maintainer  : Kishaloy Neogi <br>
-Email       : <nkishaloy@yahoo.com> <br>
+Email       : <nkishaloy@yahoo.com>
 
 You may see the github repository at <https://github.com/n-kishaloy/financelib>
 */
