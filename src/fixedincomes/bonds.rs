@@ -16,12 +16,14 @@ pub mod rates;
 /**
 CouponBond : struct defining a Coupon bond..
 
-- c     = Coupon per period
+- par   = Par value
+- c     = Coupon rate per period
 - freq  = Frequency of coupon payment per period
 - T     = Life of the Bond
  */
 #[derive(Debug, Copy, Clone)]
 pub struct CouponBond {
+    pub par: f64,
     pub c: f64,
     pub freq: f64,
     pub t_life: f64,
@@ -34,8 +36,8 @@ impl CouponBond {
     - rate  = Discount rate given as Nominal rate
      */
     pub fn price(&self, rate: f64) -> f64 {
-        crate::pv_annuity(self.c / self.freq, rate, self.t_life, self.freq)
-            + crate::pvm(1.0, rate, self.t_life, self.freq)
+        crate::pv_annuity(self.c / self.freq * self.par, rate, self.t_life, self.freq)
+            + crate::pvm(self.par, rate, self.t_life, self.freq)
     }
 
     /**
@@ -64,11 +66,9 @@ impl CouponBond {
     Generate cash flow of the CouponBond
      */
     pub fn generate_cashflow(&self) -> Vec<f64> {
-        let mut cb: Vec<f64> = (0..(self.freq * self.t_life) as i64)
-            .into_iter()
-            .map(|_| self.c / self.freq)
-            .collect();
-        cb[(self.freq * self.t_life) as usize - 1] += 1.0;
+        let c = self.par * self.c / self.freq;
+        let mut cb: Vec<f64> = vec![c; (self.freq * self.t_life) as usize];
+        cb[(self.freq * self.t_life) as usize - 1] += self.par;
         cb
     }
 
@@ -78,7 +78,7 @@ impl CouponBond {
     Note that t is in period, so for 26 days, in a full period of 1 year, t = 26/360
     */
     pub fn accrued_interest(&self, t: f64) -> f64 {
-        t * self.c
+        t * self.c * self.par
     }
 
     /**
@@ -102,30 +102,32 @@ mod bonds_fn {
     #[test]
     fn coupon_bonds() {
         let cb = CouponBond {
+            par: 100.0,
             c: 0.05,
             freq: 2.0,
             t_life: 3.0,
         };
-        assert_eq!(cb.price(0.03), 1.056971871654752);
+        assert_eq!(cb.price(0.03), 105.6971871654752);
         println!("{:?}", cb.generate_cashflow());
         assert_eq!(
             cb.price_ratecurve(&rates::RateCurve::NominalRateCurve {
                 rate: vec![0.0016, 0.0021, 0.0027, 0.0033, 0.0037, 0.0041],
                 freq: 2.0
             }),
-            1.1369147941993403
+            113.69147941993403
         );
-        assert_eq!(cb.ytm(1.1369147941993403), 0.004038639185260506);
-        assert!(crate::approx(cb.ytm(1.056971871654752), 0.03));
+        assert_eq!(cb.ytm(113.69147941993403), 0.004038639185260602);
+        assert!(crate::approx(cb.ytm(105.6971871654752), 0.03));
 
         let cb = CouponBond {
+            par: 100.0,
             c: 0.05,
             freq: 2.0,
             t_life: 9.0,
         };
 
-        assert_eq!(cb.accrued_interest(88.0 / 362.0), 0.012154696132596685);
-        assert_eq!(cb.pv_full(0.048, 88.0 / 362.0), 1.0262432259347734);
-        assert_eq!(cb.pv_flat(0.048, 88.0 / 362.0), 1.0140885298021767);
+        assert_eq!(cb.accrued_interest(88.0 / 362.0), 1.2154696132596685);
+        assert_eq!(cb.pv_full(0.048, 88.0 / 362.0), 102.62432259347733);
+        assert_eq!(cb.pv_flat(0.048, 88.0 / 362.0), 101.40885298021766);
     }
 }
