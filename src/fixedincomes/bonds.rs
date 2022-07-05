@@ -11,6 +11,7 @@ The module describes the base modules of Bonds.
 
 You may see the github repository at <https://github.com/n-kishaloy/financelib>
  */
+
 pub mod rates;
 
 /**
@@ -52,7 +53,7 @@ impl CouponBond {
     /**
     Price of Coupon bond given a discount RateCurve
 
-    - rates  = Discount rate given as Nominal RateCurve
+    - rc = Discount rate given as Nominal RateCurve
      */
     pub fn price_ratecurve(&self, rc: &rates::RateCurve) -> f64 {
         self.generate_cashflow()
@@ -96,6 +97,72 @@ impl CouponBond {
     }
 }
 
+/**
+CouponBond : struct defining a Coupon bond..
+
+- par               = Par value
+- quoted_margin     = Quoted margin payment over the Index rate per period
+- freq              = Frequency of payment per period
+- discount_margin
+- T             = Life of the Bond
+ */
+#[derive(Debug, Copy, Clone)]
+pub struct FloatingRateNotes {
+    pub par: f64,
+    pub quoted_margin: f64,
+    pub freq: f64,
+    pub t_life: f64,
+}
+
+impl FloatingRateNotes {
+    /**
+    Price of Floating Rate Note given a discount rate
+
+    - rate  = Discount rate given as Nominal rate
+     */
+    pub fn price(&self, index_rate: f64, discount_margin: f64) -> f64 {
+        crate::pv_annuity(
+            (self.quoted_margin + index_rate) * self.par / self.freq,
+            index_rate + discount_margin,
+            self.t_life,
+            self.freq,
+        ) + crate::pvm(
+            self.par,
+            index_rate + discount_margin,
+            self.t_life,
+            self.freq,
+        )
+    }
+
+    /**
+    Discount margin of a Floating Rate Note given the price and index rate
+
+    - price         = Price of the Floating Rate Note
+    - index_rate    = Index rate
+     */
+    pub fn discount_margin(&self, price: f64, index_rate: f64) -> f64 {
+        crate::newt_raph(|x| self.price(index_rate, x) - price, 0.005, 1e-6).unwrap()
+    }
+
+    /**
+    Price of Floating Rate Note given a Index RateCurve
+
+    - rc  = Discount rate given as Nominal RateCurve
+     */
+    pub fn price_ratecurve(&self, _idx_rc: &rates::RateCurve, _discount_margin: f64) -> f64 {
+        // TODO: Add imolementation
+        unimplemented!()
+    }
+
+    /**
+    Discount margin of a Floating Rate Note given a Index RateCurve and a Price
+     */
+    pub fn discount_margin_ratecurve(&self, price: f64, idx_rc: &rates::RateCurve) -> f64 {
+        // TODO: Check implementation
+        crate::newt_raph(|x| self.price_ratecurve(idx_rc, x) - price, 0.005, 1e-6).unwrap()
+    }
+}
+
 #[cfg(test)]
 mod bonds_fn {
     use super::*;
@@ -129,5 +196,27 @@ mod bonds_fn {
         assert_eq!(cb.accrued_interest(88.0 / 362.0), 1.2154696132596685);
         assert_eq!(cb.pv_full(0.048, 88.0 / 362.0), 102.62432259347733);
         assert_eq!(cb.pv_flat(0.048, 88.0 / 362.0), 101.40885298021766);
+
+        assert_eq!(
+            FloatingRateNotes {
+                par: 100.0,
+                quoted_margin: 0.005,
+                freq: 2.0,
+                t_life: 2.0,
+            }
+            .price(0.0125, 0.004),
+            100.19594209266003
+        );
+
+        assert_eq!(
+            FloatingRateNotes {
+                par: 100.0,
+                quoted_margin: 0.0075,
+                freq: 4.0,
+                t_life: 5.0
+            }
+            .discount_margin(95.50, 0.011),
+            0.017180561798632237
+        );
     }
 }

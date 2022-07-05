@@ -36,6 +36,7 @@ pub enum RateCurve {
 impl RateCurve {
     /**
     Estimate the rate at a particular time by interpolating between the rate curves points
+
     - y = the time given as period whose rate is being sought.
      */
     pub fn rate_estim(&self, y: f64) -> f64 {
@@ -59,6 +60,7 @@ impl RateCurve {
 
     /**
     The Present Value of a cash flow at a particular time.
+
     - c     = cash flow
     - tim   = time in period at which the cash flow occurs.
      */
@@ -74,7 +76,7 @@ impl RateCurve {
     /**
     Convert the RateCurve to a curve with Nominal rates
      */
-    pub fn convert_nominal(&self) -> RateCurve {
+    pub fn to_nominal(&self) -> RateCurve {
         match self {
             Self::EffectiveRateCurve { rate, freq } => RateCurve::NominalRateCurve {
                 rate: rate
@@ -97,7 +99,7 @@ impl RateCurve {
     /**
     Convert the RateCurve to a curve with Effective rates
      */
-    pub fn convert_effective(&self) -> RateCurve {
+    pub fn to_effective(&self) -> RateCurve {
         match self {
             Self::NominalRateCurve { rate, freq } => RateCurve::EffectiveRateCurve {
                 rate: rate
@@ -117,7 +119,7 @@ impl RateCurve {
     /**
     Convert the RateCurve to a curve with Exponential rates
      */
-    pub fn convert_exponential(&self) -> RateCurve {
+    pub fn to_exponential(&self) -> RateCurve {
         match self {
             Self::NominalRateCurve { rate, freq } => RateCurve::ExponentialRateCurve {
                 rate: rate
@@ -135,8 +137,111 @@ impl RateCurve {
     }
 }
 
+/**
+The Rates enum defines different types of Rates represemted in RateCurves
+
+- SpotRates
+- ParRates
+- ForwardRates
+ */
+#[derive(Debug, Clone)]
+pub enum Rates {
+    SpotRates { rate: RateCurve },
+    ParRates { rate: RateCurve },
+    ForwardRates { rate: RateCurve },
+}
+
+impl Rates {
+    /** Change ParRates to SpotRates */
+    pub fn to_spot(&self) -> Rates {
+        match &self {
+            &Self::ParRates { rate } => {
+                let (rt, fq) = match &rate {
+                    &RateCurve::NominalRateCurve { rate, freq } => (rate, freq),
+                    _ => unimplemented!(),
+                };
+                let n = rt.len();
+                let mut y = vec![0.0; n];
+
+                y[0] = rt[0];
+                for i in 1..n {
+                    let xm = rt[i] / fq;
+                    let sm = (0..i)
+                        .map(|k| xm / (1.0 + y[k] / fq).powf((k + 1) as f64))
+                        .sum::<f64>();
+                    y[i] = (((1.0 + xm) / (1.0 - sm)).powf(1.0 / ((i + 1) as f64)) - 1.0) * fq
+                }
+                Rates::SpotRates {
+                    rate: RateCurve::NominalRateCurve { rate: y, freq: *fq },
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    /** Change SpotRates to ParRates */
+    pub fn to_par(&self) -> Rates {
+        match &self {
+            &Self::SpotRates { rate } => {
+                let (rt, fq) = match &rate {
+                    &RateCurve::NominalRateCurve { rate, freq } => (rate, freq),
+                    _ => unimplemented!(),
+                };
+
+                Rates::ParRates {
+                    rate: RateCurve::NominalRateCurve {
+                        rate: {
+                            (0..rt.len())
+                                .map(|i| {
+                                    fq * (1.0 - 1.0 / (1.0 + rt[i] / fq).powf((i + 1) as f64))
+                                        / (0..=i)
+                                            .map(|k| 1.0 / (1.0 + rt[k] / fq).powf((k + 1) as f64))
+                                            .sum::<f64>()
+                                })
+                                .collect()
+                        },
+                        freq: *fq,
+                    },
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+
+    /** Estimate Rate at a  */
+    pub fn rate_estim(&self, y: f64) -> f64 {
+        match &self {
+            &Self::SpotRates { rate } => rate.rate_estim(y),
+            &Self::ParRates { rate } => rate.rate_estim(y),
+            &Self::ForwardRates { rate } => rate.rate_estim(y),
+        }
+    }
+
+    /**
+    Estimate the forward rate for a given forward period of a given tenor
+
+    - forward_period    = forward period start point
+    - tenor             = tenor of the forward period
+     */
+    pub fn forward_rate(&self, forward_period: f64, tenor: f64) -> f64 {
+        match &self {
+            &Self::SpotRates { rate } => {
+                let f = match rate {
+                    RateCurve::NominalRateCurve { freq, .. } => freq,
+                    _ => unimplemented!(),
+                };
+                (1.0 + rate.rate_estim(forward_period + tenor) / f).powf(tenor * f)
+                    / (1.0 + rate.rate_estim(forward_period) / f).powf(forward_period * f)
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod rate_fn {
+    use core::panic;
+
     use super::*;
     use crate::approx;
     use RateCurve::*;
@@ -163,8 +268,8 @@ mod rate_fn {
             rate: vec![0.0016, 0.0021, 0.0027, 0.0033, 0.0037, 0.0041],
             freq: 2.0,
         };
-        let er = et.convert_effective();
-        let en = er.convert_nominal();
+        let er = et.to_effective();
+        let en = er.to_nominal();
 
         if let RateCurve::EffectiveRateCurve { rate, .. } = er {
             assert!(approx(rate[0], 0.0016006400));
@@ -184,17 +289,11 @@ mod rate_fn {
             assert!(approx(rate[5], 0.0041));
         }
 
-        let ez = et
-            .convert_exponential()
-            .convert_effective()
-            .convert_nominal();
+        let ez = et.to_exponential().to_effective().to_nominal();
 
-        let ey = et
-            .convert_effective()
-            .convert_exponential()
-            .convert_nominal();
+        let ey = et.to_effective().to_exponential().to_nominal();
 
-        let ew = et.convert_exponential().convert_nominal();
+        let ew = et.to_exponential().to_nominal();
 
         let rz = if let RateCurve::NominalRateCurve { rate, .. } = ez {
             rate
@@ -219,5 +318,39 @@ mod rate_fn {
         assert!(rz[1] == ry[1]);
         assert!(rz[4] == ry[4]);
         assert!(rz[0] == rw[0]);
+
+        let er = Rates::ParRates {
+            rate: RateCurve::NominalRateCurve {
+                rate: vec![0.020000, 0.024000, 0.027600, 0.030840, 0.033756, 0.036380],
+                freq: 2.0,
+            },
+        }
+        .to_spot();
+
+        let rx = match er {
+            Rates::SpotRates { ref rate } => match rate {
+                RateCurve::NominalRateCurve { rate, .. } => rate,
+                _ => panic!("hi"),
+            },
+            _ => panic!("hiya"),
+        };
+
+        assert!(approx(rx[0], 0.02));
+        assert_eq!(rx[3], 0.030973763781325214);
+        assert_eq!(rx[4], 0.03397441792873934);
+        assert_eq!(rx[5], 0.036700426487687565);
+
+        let xt = er.to_par();
+        let et = match xt {
+            Rates::ParRates { ref rate } => match rate {
+                RateCurve::NominalRateCurve { rate, .. } => rate,
+                _ => panic!("hi"),
+            },
+            _ => panic!("hiya"),
+        };
+
+        assert!(approx(et[2], 0.027600));
+        assert!(approx(et[3], 0.030840));
+        assert!(approx(et[5], 0.036380));
     }
 }
