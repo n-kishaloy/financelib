@@ -12,4 +12,3 @@ ndarray = { version = "*" }
 ndarray-stats = { version = "*" }
 nalgebra = { version = "*" }
 argmin = { version = "*" }
-yearfrac = { version = "*" }

@@ -208,7 +208,10 @@ impl Rates {
         }
     }
 
-    /** Estimate Rate at a  */
+    /** Estimate Rate at a time period
+
+    - y = time period at which rate is to be estimated
+    */
     pub fn rate_estim(&self, y: f64) -> f64 {
         match &self {
             &Self::SpotRates { rate } => rate.rate_estim(y),
@@ -226,12 +229,16 @@ impl Rates {
     pub fn forward_rate(&self, forward_period: f64, tenor: f64) -> f64 {
         match &self {
             &Self::SpotRates { rate } => {
+                let ft = forward_period + tenor;
                 let f = match rate {
                     RateCurve::NominalRateCurve { freq, .. } => freq,
                     _ => unimplemented!(),
                 };
-                (1.0 + rate.rate_estim(forward_period + tenor) / f).powf(tenor * f)
-                    / (1.0 + rate.rate_estim(forward_period) / f).powf(forward_period * f)
+                (((1.0 + rate.rate_estim(ft) / f).powf(ft * f)
+                    / (1.0 + rate.rate_estim(forward_period) / f).powf(forward_period * f))
+                .powf(1.0 / (tenor * f))
+                    - 1.0)
+                    * f
             }
             _ => unimplemented!(),
         }
@@ -352,5 +359,13 @@ mod rate_fn {
         assert!(approx(et[2], 0.027600));
         assert!(approx(et[3], 0.030840));
         assert!(approx(et[5], 0.036380));
+
+        let rt = Rates::SpotRates {
+            rate: RateCurve::NominalRateCurve {
+                rate: vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0365, 0.0, 0.0418],
+                freq: 2.0,
+            },
+        };
+        assert_eq!(rt.forward_rate(3.0, 1.0), 0.057782903318259304);
     }
 }

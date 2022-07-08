@@ -12,6 +12,7 @@ The module describes the base modules of Bonds.
 You may see the github repository at <https://github.com/n-kishaloy/financelib>
  */
 
+pub mod durations;
 pub mod rates;
 
 /**
