@@ -381,7 +381,7 @@ impl ProfitLoss {
         unimplemented!()
     }
 }
-pub fn profit_loss_from_json(_js: &String) -> BalanceSheet {
+pub fn profit_loss_from_json(_js: &String) -> ProfitLoss {
     // TODO: Implement
     unimplemented!()
 }
@@ -398,7 +398,7 @@ impl CashFlow {
         unimplemented!()
     }
 }
-pub fn cash_flow_from_json(_js: &String) -> BalanceSheet {
+pub fn cash_flow_from_json(_js: &String) -> CashFlow {
     // TODO: Implement
     unimplemented!()
 }
