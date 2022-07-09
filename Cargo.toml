@@ -12,3 +12,4 @@ ndarray = { version = "*" }
 ndarray-stats = { version = "*" }
 nalgebra = { version = "*" }
 argmin = { version = "*" }
+lazy_static = { version = "*" }
