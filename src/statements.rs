@@ -16,6 +16,10 @@ You may see the github repository at <https://github.com/n-kishaloy/financelib>
 use chrono::naive::NaiveDate as NDt;
 use lazy_static::lazy_static;
 
+pub trait FinType {
+    fn is_calc(self) -> bool;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum BsTyp {
     Cash,
@@ -173,171 +177,263 @@ use BsTyp::*;
 use PlTyp::*;
 
 lazy_static! {
-    static ref BALANCE_SHEET_MAP: Vec<(BsTyp, Vec<BsTyp>, Vec<BsTyp>)> = vec![
+    static ref BALANCE_SHEET_MAP: Vec<(BsTyp, (Vec<BsTyp>, Vec<BsTyp>))> = vec![
         (
             Inventories,
-            vec![RawMaterials, WorkInProgress, FinishedGoods],
-            vec![],
+            (vec![RawMaterials, WorkInProgress, FinishedGoods], vec![],)
         ),
         (
             CurrentAssets,
-            vec![
-                Cash,
-                CurrentReceivables,
-                CurrentLoans,
-                CurrentAdvances,
-                OtherCurrentAssets,
-                CurrentInvestments,
-                Inventories,
-            ],
-            vec![],
+            (
+                vec![
+                    Cash,
+                    CurrentReceivables,
+                    CurrentLoans,
+                    CurrentAdvances,
+                    OtherCurrentAssets,
+                    CurrentInvestments,
+                    Inventories,
+                ],
+                vec![],
+            )
         ),
         (
             NetPlantPropertyEquipment,
-            vec![PlantPropertyEquipment],
-            vec![AccumulatedDepreciation],
+            (vec![PlantPropertyEquipment], vec![AccumulatedDepreciation],)
         ),
         (
             NetLeaseRentalAssets,
-            vec![LeasingRentalAssets],
-            vec![AccumulatedAmortizationLeaseRental],
+            (
+                vec![LeasingRentalAssets],
+                vec![AccumulatedAmortizationLeaseRental],
+            )
         ),
         (
             NetIntangibleAssets,
-            vec![IntangibleAssets, IntangibleAssetsDevelopment],
-            vec![AccumulatedAmortization],
+            (
+                vec![IntangibleAssets, IntangibleAssetsDevelopment],
+                vec![AccumulatedAmortization],
+            )
         ),
         (
             LongTermAssets,
-            vec![
-                AccountReceivables,
-                LongTermLoanAssets,
-                LongTermAdvances,
-                LongTermInvestments,
-                OtherLongTermAssets,
-                NetPlantPropertyEquipment,
-                NetLeaseRentalAssets,
-                Goodwill,
-                CapitalWip,
-                OtherTangibleAssets,
-                NetIntangibleAssets,
-            ],
-            vec![],
+            (
+                vec![
+                    AccountReceivables,
+                    LongTermLoanAssets,
+                    LongTermAdvances,
+                    LongTermInvestments,
+                    OtherLongTermAssets,
+                    NetPlantPropertyEquipment,
+                    NetLeaseRentalAssets,
+                    Goodwill,
+                    CapitalWip,
+                    OtherTangibleAssets,
+                    NetIntangibleAssets,
+                ],
+                vec![],
+            )
         ),
-        (Assets, vec![CurrentAssets, LongTermAssets], vec![]),
+        (Assets, (vec![CurrentAssets, LongTermAssets], vec![])),
         (
             CurrentLiabilities,
-            vec![
-                CurrentPayables,
-                CurrentBorrowings,
-                CurrentNotesPayable,
-                OtherCurrentLiabilities,
-                InterestPayable,
-                CurrentProvisions,
-                CurrentTaxPayables,
-                LiabilitiesSaleAssets,
-                CurrentLeasesLiability,
-            ],
-            vec![],
+            (
+                vec![
+                    CurrentPayables,
+                    CurrentBorrowings,
+                    CurrentNotesPayable,
+                    OtherCurrentLiabilities,
+                    InterestPayable,
+                    CurrentProvisions,
+                    CurrentTaxPayables,
+                    LiabilitiesSaleAssets,
+                    CurrentLeasesLiability,
+                ],
+                vec![],
+            )
         ),
         (
             LongTermLiabilities,
-            vec![
-                AccountPayables,
-                LongTermBorrowings,
-                BondsPayable,
-                DeferredTaxLiabilities,
-                LongTermLeasesLiability,
-                DeferredCompensation,
-                DeferredRevenues,
-                CustomerDeposits,
-                OtherLongTermLiabilities,
-                PensionProvision,
-                TaxProvision,
-                LongTermProvision,
-            ],
-            vec![],
+            (
+                vec![
+                    AccountPayables,
+                    LongTermBorrowings,
+                    BondsPayable,
+                    DeferredTaxLiabilities,
+                    LongTermLeasesLiability,
+                    DeferredCompensation,
+                    DeferredRevenues,
+                    CustomerDeposits,
+                    OtherLongTermLiabilities,
+                    PensionProvision,
+                    TaxProvision,
+                    LongTermProvision,
+                ],
+                vec![],
+            )
         ),
         (
             Liabilities,
-            vec![CurrentLiabilities, LongTermLiabilities],
-            vec![],
+            (vec![CurrentLiabilities, LongTermLiabilities], vec![],)
         ),
         (
             Equity,
-            vec![
-                CommonStock,
-                PreferredStock,
-                PdInCapAbovePar,
-                PdInCapTreasuryStock,
-                RevaluationReserves,
-                Reserves,
-                RetainedEarnings,
-                AccumulatedOci,
-                MinorityInterests,
-            ],
-            vec![],
+            (
+                vec![
+                    CommonStock,
+                    PreferredStock,
+                    PdInCapAbovePar,
+                    PdInCapTreasuryStock,
+                    RevaluationReserves,
+                    Reserves,
+                    RetainedEarnings,
+                    AccumulatedOci,
+                    MinorityInterests,
+                ],
+                vec![],
+            )
         ),
     ];
-    static ref PROFIT_LOSS_MAP: Vec<(PlTyp, Vec<PlTyp>, Vec<PlTyp>)> = vec![
+    static ref PROFIT_LOSS_MAP: Vec<(PlTyp, (Vec<PlTyp>, Vec<PlTyp>))> = vec![
         (
             Revenue,
-            vec![OperatingRevenue, NonOperatingRevenue,],
-            vec![ExciseStaxLevy],
+            (
+                vec![OperatingRevenue, NonOperatingRevenue,],
+                vec![ExciseStaxLevy],
+            )
         ),
-        (COGS, vec![CostMaterial, DirectExpenses], vec![],),
-        (GrossProfit, vec![Revenue], vec![COGS],),
+        (COGS, (vec![CostMaterial, DirectExpenses], vec![],)),
+        (GrossProfit, (vec![Revenue], vec![COGS],)),
         (
             Pbitda,
-            vec![GrossProfit, OtherIncome],
-            vec![
-                Salaries,
-                AdministrativeExpenses,
-                ResearchNDevelopment,
-                OtherOverheads,
-                OtherOperativeExpenses,
-                OtherExpenses,
-                ExceptionalItems
-            ],
+            (
+                vec![GrossProfit, OtherIncome],
+                vec![
+                    Salaries,
+                    AdministrativeExpenses,
+                    ResearchNDevelopment,
+                    OtherOverheads,
+                    OtherOperativeExpenses,
+                    OtherExpenses,
+                    ExceptionalItems
+                ],
+            )
         ),
         (
             Pbitx,
-            vec![Pbitda],
-            vec![
-                Depreciation,
-                AssetImpairment,
-                LossDivestitures,
-                Amortization
-            ],
+            (
+                vec![Pbitda],
+                vec![
+                    Depreciation,
+                    AssetImpairment,
+                    LossDivestitures,
+                    Amortization
+                ],
+            )
         ),
         (
             Pbtx,
-            vec![Pbitx, InterestRevenue, OtherFinancialRevenue],
-            vec![InterestExpense, CostDebt],
+            (
+                vec![Pbitx, InterestRevenue, OtherFinancialRevenue],
+                vec![InterestExpense, CostDebt],
+            )
         ),
-        (Pbt, vec![Pbtx], vec![ExtraordinaryItems, PriorYears],),
-        (Pat, vec![Pbt], vec![TaxesCurrent, TaxesDeferred],),
-        (NetIncome, vec![Pat, NetIncomeDiscontinuedOps], vec![],),
+        (Pbt, (vec![Pbtx], vec![ExtraordinaryItems, PriorYears],)),
+        (Pat, (vec![Pbt], vec![TaxesCurrent, TaxesDeferred],)),
+        (NetIncome, (vec![Pat, NetIncomeDiscontinuedOps], vec![],)),
         (
             OtherComprehensiveIncome,
-            vec![
-                GainsLossesForex,
-                GainsLossesActurial,
-                GainsLossesSales,
-                FvChangeAvlSale
-            ],
-            vec![OtherDeferredTaxes],
+            (
+                vec![
+                    GainsLossesForex,
+                    GainsLossesActurial,
+                    GainsLossesSales,
+                    FvChangeAvlSale
+                ],
+                vec![OtherDeferredTaxes],
+            )
         ),
         (
             TotalComprehensiveIncome,
-            vec![NetIncome, OtherComprehensiveIncome],
-            vec![],
+            (vec![NetIncome, OtherComprehensiveIncome], vec![],)
         ),
     ];
     static ref BALANCE_SHEET_CALC: HashSet<BsTyp> =
-        BALANCE_SHEET_MAP.iter().map(|&(x, _, _)| x).collect();
-    static ref PROFIT_LOSS_CALC: HashSet<PlTyp> =
-        PROFIT_LOSS_MAP.iter().map(|&(x, _, _)| x).collect();
+        BALANCE_SHEET_MAP.iter().map(|&(x, _)| x).collect();
+    static ref PROFIT_LOSS_CALC: HashSet<PlTyp> = PROFIT_LOSS_MAP.iter().map(|&(x, _)| x).collect();
+    static ref BALANCE_SHEET_HASHMAP: HashMap<BsTyp, (Vec<BsTyp>, Vec<BsTyp>)> = {
+        let mut yx = HashMap::new();
+        for (k, (p, q)) in BALANCE_SHEET_MAP.iter() {
+            yx.insert(*k, (p.clone(), q.clone()));
+        }
+        yx
+    };
+    static ref DEBIT_TYPE: HashMap<BsTyp, BalanceSheetEntry> = {
+        let mut mz = HashMap::new();
+        debit_mapping(
+            &mut mz,
+            BsTyp::Assets,
+            BalanceSheetEntry::AssetEntry,
+            BalanceSheetEntry::AssetContra,
+        );
+        debit_mapping(
+            &mut mz,
+            BsTyp::Liabilities,
+            BalanceSheetEntry::LiabilityEntry,
+            BalanceSheetEntry::LiabilityContra,
+        );
+        debit_mapping(
+            &mut mz,
+            BsTyp::Equity,
+            BalanceSheetEntry::EquityEntry,
+            BalanceSheetEntry::EquityContra,
+        );
+        mz
+    };
+}
+#[derive(Debug, Clone, Copy)]
+enum BalanceSheetEntry {
+    AssetEntry,
+    AssetContra,
+    LiabilityEntry,
+    LiabilityContra,
+    EquityEntry,
+    EquityContra,
+}
+
+fn debit_mapping(
+    debit_map: &mut HashMap<BsTyp, BalanceSheetEntry>,
+    calc_type: BsTyp,
+    calc_pos: BalanceSheetEntry,
+    calc_neg: BalanceSheetEntry,
+) {
+    let (a, b) = BALANCE_SHEET_HASHMAP.get(&calc_type).unwrap();
+    for x in a.iter() {
+        if BALANCE_SHEET_CALC.contains(x) {
+            debit_mapping(debit_map, *x, calc_pos, calc_neg)
+        } else {
+            debit_map.insert(*x, calc_pos);
+        }
+    }
+    for x in b.iter() {
+        if BALANCE_SHEET_CALC.contains(x) {
+            debit_mapping(debit_map, *x, calc_neg, calc_pos)
+        } else {
+            debit_map.insert(*x, calc_neg);
+        }
+    }
+}
+
+impl FinType for BsTyp {
+    fn is_calc(self) -> bool {
+        BALANCE_SHEET_CALC.contains(&self)
+    }
+}
+
+impl FinType for PlTyp {
+    fn is_calc(self) -> bool {
+        PROFIT_LOSS_CALC.contains(&self)
+    }
 }
 
 pub struct Param {
@@ -381,6 +477,7 @@ impl ProfitLoss {
         unimplemented!()
     }
 }
+
 pub fn profit_loss_from_json(_js: &String) -> ProfitLoss {
     // TODO: Implement
     unimplemented!()
@@ -398,6 +495,7 @@ impl CashFlow {
         unimplemented!()
     }
 }
+
 pub fn cash_flow_from_json(_js: &String) -> CashFlow {
     // TODO: Implement
     unimplemented!()
@@ -506,11 +604,14 @@ mod accounts {
     use super::*;
     #[test]
     fn threaded() {
-        let (x, _, _) = BALANCE_SHEET_MAP[0];
+        let y = Inventories;
+        let (x, _) = BALANCE_SHEET_MAP[0];
         assert_eq!(Inventories, x);
-        assert!(BALANCE_SHEET_CALC.contains(&NetPlantPropertyEquipment));
-        assert!(!BALANCE_SHEET_CALC.contains(&RawMaterials));
-        assert!(PROFIT_LOSS_CALC.contains(&Pbitda));
-        assert!(!PROFIT_LOSS_CALC.contains(&Salaries));
+        assert!(y.is_calc());
+        assert!(y.is_calc());
+        assert!(NetPlantPropertyEquipment.is_calc());
+        assert!(!RawMaterials.is_calc());
+        assert!(Pbitda.is_calc());
+        assert!(!Salaries.is_calc());
     }
 }
