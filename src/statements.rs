@@ -15,12 +15,13 @@ You may see the github repository at <https://github.com/n-kishaloy/financelib>
 
 use chrono::naive::NaiveDate as NDt;
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
 
 pub trait FinType {
     fn is_calc(self) -> bool;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum BsTyp {
     Cash,
     CurrentReceivables,
@@ -89,7 +90,7 @@ pub enum BsTyp {
     Equity,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum PlTyp {
     OperatingRevenue,
     NonOperatingRevenue,
@@ -135,7 +136,7 @@ pub enum PlTyp {
     TotalComprehensiveIncome,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum CfTyp {
     DeferredIncomeTaxes,
     ChangeInventories,
@@ -169,6 +170,19 @@ pub enum CfTyp {
     OtherCfFinancing,
     CashFlowFinancing,
     NetCashFlow,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
+pub enum FinOthersTyp {
+    Taxrate,
+    CurrentRatio,
+    AcidRatio,
+    DaysOfInventory,
+    InventoryTurnoverRatio,
+    Fcff,
+    Fcfs,
+    Fcfe,
+    Fcfd,
 }
 
 use std::collections::{HashMap, HashSet};
@@ -391,7 +405,7 @@ lazy_static! {
         mz
     };
 }
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 enum BalanceSheetEntry {
     AssetEntry,
     AssetContra,
@@ -439,8 +453,7 @@ impl FinType for PlTyp {
 pub trait FinMaps {
     fn calc_elements(&mut self);
     fn clean(&mut self);
-    fn to_json(&self) -> String;
-    fn from_json(_js: String) -> Self;
+    fn check(&self) -> bool;
 }
 
 impl FinMaps for BsMap {
@@ -452,27 +465,32 @@ impl FinMaps for BsMap {
         todo!()
     }
 
-    fn to_json(&self) -> String {
-        todo!()
-    }
-
-    fn from_json(_js: String) -> Self {
+    fn check(&self) -> bool {
         todo!()
     }
 }
 
-pub fn debit(_bs: &mut BsMap, _ty: BsTyp, _x: f64) {
-    todo!()
+impl BsMapTrait for BsMap {
+    fn debit(&mut self, _ty: BsTyp, _x: f64) {
+        todo!()
+    }
+
+    fn credit(&mut self, _ty: BsTyp, _x: f64) {
+        todo!()
+    }
+
+    fn transact(&mut self, _deb: BsTyp, _crd: BsTyp, _x: f64) {
+        todo!()
+    }
 }
 
-pub fn credit(_bs: &mut BsMap, _ty: BsTyp, _x: f64) {
-    todo!()
+pub trait BsMapTrait {
+    fn debit(&mut self, _ty: BsTyp, _x: f64);
+    fn credit(&mut self, _ty: BsTyp, _x: f64);
+    fn transact(&mut self, _deb: BsTyp, _crd: BsTyp, _x: f64);
 }
 
-pub fn transact(_bs: &mut BsMap, _deb: BsTyp, _x: f64) {
-    todo!()
-}
-
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Param {
     pub unlevered: f64,
     pub shield_tax: f64,
@@ -484,54 +502,36 @@ pub struct Param {
 pub type BsMap = HashMap<BsTyp, f64>;
 pub type PlMap = HashMap<PlTyp, f64>;
 pub type CfMap = HashMap<CfTyp, f64>;
+pub type FinOthersMap = HashMap<FinOthersTyp, f64>;
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BalanceSheet {
     pub date: NDt,
     pub items: BsMap,
 }
 
-impl BalanceSheet {
-    pub fn to_json(&self) -> String {
-        todo!()
-    }
-
-    pub fn from_json(_js: &String) -> Self {
-        todo!()
-    }
-}
-
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProfitLoss {
     pub date_beg: NDt,
     pub date_end: NDt,
     pub items: PlMap,
 }
 
-impl ProfitLoss {
-    pub fn to_json(&self) -> String {
-        todo!()
-    }
-
-    pub fn from_json(_js: &String) -> Self {
-        todo!()
-    }
-}
-
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CashFlow {
     pub date_beg: NDt,
     pub date_end: NDt,
-    pub items: PlMap,
+    pub items: CfMap,
 }
 
-impl CashFlow {
-    pub fn to_json(&self) -> String {
-        todo!()
-    }
-
-    pub fn from_json(_js: &String) -> Self {
-        todo!()
-    }
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FinOthers {
+    pub date_beg: NDt,
+    pub date_end: NDt,
+    pub items: FinOthersMap,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
     pub date_beg: NDt,
     pub date_end: NDt,
@@ -541,7 +541,7 @@ pub struct Account {
     pub profit_loss: Option<PlMap>,
     pub cash_flow: Option<CfMap>,
 
-    pub others: Option<HashMap<String, f64>>,
+    pub others: FinOthersMap,
 }
 
 impl Account {
@@ -552,12 +552,62 @@ impl Account {
         Option<BalanceSheet>,
         Option<ProfitLoss>,
         Option<CashFlow>,
+        FinOthers,
     ) {
+        (
+            self.balance_sheet_beg(),
+            self.balance_sheet_end(),
+            self.profit_loss(),
+            self.cash_flow(),
+            self.fin_others(),
+        )
+    }
+
+    pub fn from_statements(
+        _bs0: &Option<BalanceSheet>,
+        _bs1: &Option<BalanceSheet>,
+        _pl: &Option<ProfitLoss>,
+        _cf: &Option<CashFlow>,
+    ) -> Option<Self> {
         todo!()
     }
 
-    pub fn to_json(&self) -> String {
-        todo!()
+    pub fn balance_sheet_beg(&self) -> Option<BalanceSheet> {
+        Some(BalanceSheet {
+            date: self.date_beg,
+            items: (&self.balance_sheet_beg).clone()?,
+        })
+    }
+
+    pub fn balance_sheet_end(&self) -> Option<BalanceSheet> {
+        Some(BalanceSheet {
+            date: self.date_end,
+            items: (&self.balance_sheet_end).clone()?,
+        })
+    }
+
+    pub fn profit_loss(&self) -> Option<ProfitLoss> {
+        Some(ProfitLoss {
+            date_beg: self.date_beg,
+            date_end: self.date_end,
+            items: (&self.profit_loss).clone()?,
+        })
+    }
+
+    pub fn cash_flow(&self) -> Option<CashFlow> {
+        Some(CashFlow {
+            date_beg: self.date_beg,
+            date_end: self.date_end,
+            items: (&self.cash_flow).clone()?,
+        })
+    }
+
+    pub fn fin_others(&self) -> FinOthers {
+        FinOthers {
+            date_beg: self.date_beg,
+            date_end: self.date_end,
+            items: (self.others).clone(),
+        }
     }
 
     pub fn eps() -> f64 {
@@ -573,20 +623,9 @@ impl Account {
     ) -> f64 {
         todo!()
     }
-    pub fn from_statements(
-        _bs0: &Option<BalanceSheet>,
-        _bs1: &Option<BalanceSheet>,
-        _pl: &Option<ProfitLoss>,
-        _cf: &Option<CashFlow>,
-    ) -> Self {
-        todo!()
-    }
-
-    pub fn from_json(_js: &String) -> Self {
-        todo!()
-    }
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Company {
     pub code: String,
     pub affiliation: HashMap<String, f64>,
@@ -595,7 +634,7 @@ pub struct Company {
     pub balance_sheet: HashMap<NDt, Option<BsMap>>,
     pub profit_loss: HashMap<(NDt, NDt), Option<PlMap>>,
     pub cash_flow: HashMap<(NDt, NDt), Option<CfMap>>,
-    pub others: HashMap<(NDt, NDt), HashMap<String, f64>>,
+    pub others: HashMap<(NDt, NDt), FinOthersMap>,
     pub share_price: Option<Vec<(NDt, f64)>>,
     pub rate: Option<Vec<Param>>,
     pub beta: Option<Vec<Param>>,
@@ -611,31 +650,30 @@ impl Company {
                 balance_sheet_end: (self.balance_sheet.get(&d1).unwrap()).clone(),
                 profit_loss: (self.profit_loss.get(&(d0, d1)).unwrap()).clone(),
                 cash_flow: (self.cash_flow.get(&(d0, d1)).unwrap()).clone(),
-                others: None,
+                others: (self.others.get(&(d0, d1)).unwrap()).clone(),
             })
         } else {
             None
         }
     }
 
+    pub fn sort_dates(&mut self) {
+        todo!()
+    }
+
     pub fn to_account_vec(&self) -> Vec<Account> {
         todo!()
     }
 
-    pub fn to_json(&self) -> String {
-        todo!()
-    }
     pub fn from_account_vec(_ac_vec: &Vec<Account>) -> Self {
-        todo!()
-    }
-
-    pub fn from_json(_js: &String) -> Self {
         todo!()
     }
 }
 
 #[cfg(test)]
 mod accounts {
+    use crate::approx;
+
     use super::*;
     use BalanceSheetEntry::*;
     #[test]
@@ -662,5 +700,43 @@ mod accounts {
         assert_eq!(DEBIT_TYPE.get(&BondsPayable), Some(&LiabilityEntry));
         assert_eq!(DEBIT_TYPE.get(&Equity), None);
         assert_eq!(DEBIT_TYPE.get(&MinorityInterests), Some(&EquityEntry));
+    }
+
+    #[test]
+    fn account_check() {
+        // let b0 = BalanceSheet {
+        //     date: NDt::from_ymd(2009, 05, 22),
+        //     items: HashMap::from([(Cash, 23.5), (Equity, 12.5)]),
+        // };
+        // let b1 = BalanceSheet {
+        //     date: NDt::from_ymd(2010, 09, 20),
+        //     items: HashMap::from([(Cash, 14.5), (CurrentLoans, 10.5)]),
+        // };
+
+        let ac1 = Account {
+            date_beg: NDt::from_ymd(2009, 05, 22),
+            date_end: NDt::from_ymd(2010, 09, 27),
+
+            balance_sheet_beg: Some(HashMap::from([(Cash, 23.5), (Equity, 12.5)])),
+            balance_sheet_end: None,
+
+            profit_loss: Some(HashMap::from([
+                (Revenue, -2.58),
+                (Pat, 24.8),
+                (Pbitx, 11.3),
+            ])),
+            cash_flow: None,
+
+            others: HashMap::new(),
+        };
+
+        let ac_js = serde_json::to_string(&ac1).unwrap();
+        let acx: Account = serde_json::from_str(&ac_js).unwrap();
+        // println!("{:?}", acx);
+
+        assert!(approx(
+            *ac1.balance_sheet_beg.unwrap().get(&Cash).unwrap(),
+            *acx.balance_sheet_beg.unwrap().get(&Cash).unwrap()
+        ))
     }
 }

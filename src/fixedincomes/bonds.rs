@@ -176,7 +176,7 @@ mod bonds_fn {
             t_life: 3.0,
         };
         assert_eq!(cb.price(0.03), 105.6971871654752);
-        println!("{:?}", cb.generate_cashflow());
+        // println!("{:?}", cb.generate_cashflow());
         assert_eq!(
             cb.price_ratecurve(&rates::RateCurve::NominalRateCurve {
                 rate: vec![0.0016, 0.0021, 0.0027, 0.0033, 0.0037, 0.0041],

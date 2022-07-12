@@ -7,9 +7,13 @@ edition = "2021"
 
 [dependencies]
 time = { version = "*" }
-chrono = { version = "*" }
+chrono = { version = "*", features = ["serde"] }
 ndarray = { version = "*" }
 ndarray-stats = { version = "*" }
 nalgebra = { version = "*" }
 argmin = { version = "*" }
 lazy_static = { version = "*" }
+
+
+serde = { version = "*", features = ["derive"] }
+serde_json = { version = "*" }
