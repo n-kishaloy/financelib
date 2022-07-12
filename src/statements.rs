@@ -361,10 +361,10 @@ lazy_static! {
     static ref BALANCE_SHEET_CALC: HashSet<BsTyp> =
         BALANCE_SHEET_MAP.iter().map(|&(x, _)| x).collect();
     static ref PROFIT_LOSS_CALC: HashSet<PlTyp> = PROFIT_LOSS_MAP.iter().map(|&(x, _)| x).collect();
-    static ref BALANCE_SHEET_HASHMAP: HashMap<BsTyp, (Vec<BsTyp>, Vec<BsTyp>)> = {
+    static ref BALANCE_SHEET_HASHMAP: HashMap<BsTyp, (&'static Vec<BsTyp>, &'static Vec<BsTyp>)> = {
         let mut yx = HashMap::new();
         for (k, (p, q)) in BALANCE_SHEET_MAP.iter() {
-            yx.insert(*k, (p.clone(), q.clone()));
+            yx.insert(*k, (p, q));
         }
         yx
     };
@@ -391,7 +391,7 @@ lazy_static! {
         mz
     };
 }
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum BalanceSheetEntry {
     AssetEntry,
     AssetContra,
@@ -436,6 +436,43 @@ impl FinType for PlTyp {
     }
 }
 
+pub trait FinMaps {
+    fn calc_elements(&mut self);
+    fn clean(&mut self);
+    fn to_json(&self) -> String;
+    fn from_json(&mut self, _js: String);
+}
+
+impl FinMaps for BsMap {
+    fn calc_elements(&mut self) {
+        todo!()
+    }
+
+    fn clean(&mut self) {
+        todo!()
+    }
+
+    fn to_json(&self) -> String {
+        todo!()
+    }
+
+    fn from_json(&mut self, _js: String) {
+        todo!()
+    }
+}
+
+pub fn debit(_bs: &mut BsMap, _ty: BsTyp, _x: f64) {
+    todo!()
+}
+
+pub fn credit(_bs: &mut BsMap, _ty: BsTyp, _x: f64) {
+    todo!()
+}
+
+pub fn transact(_bs: &mut BsMap, _deb: BsTyp, _x: f64) {
+    todo!()
+}
+
 pub struct Param {
     pub unlevered: f64,
     pub shield_tax: f64,
@@ -455,14 +492,12 @@ pub struct BalanceSheet {
 
 impl BalanceSheet {
     pub fn to_json(&self) -> String {
-        // TODO: Implement
-        unimplemented!()
+        todo!()
     }
 }
 
 pub fn balance_sheet_from_json(_js: &String) -> BalanceSheet {
-    // TODO: Implement
-    unimplemented!()
+    todo!()
 }
 
 pub struct ProfitLoss {
@@ -473,14 +508,12 @@ pub struct ProfitLoss {
 
 impl ProfitLoss {
     pub fn to_json(&self) -> String {
-        // TODO: Implement
-        unimplemented!()
+        todo!()
     }
 }
 
 pub fn profit_loss_from_json(_js: &String) -> ProfitLoss {
-    // TODO: Implement
-    unimplemented!()
+    todo!()
 }
 
 pub struct CashFlow {
@@ -491,14 +524,12 @@ pub struct CashFlow {
 
 impl CashFlow {
     pub fn to_json(&self) -> String {
-        // TODO: Implement
-        unimplemented!()
+        todo!()
     }
 }
 
 pub fn cash_flow_from_json(_js: &String) -> CashFlow {
-    // TODO: Implement
-    unimplemented!()
+    todo!()
 }
 
 pub struct Account {
@@ -522,13 +553,25 @@ impl Account {
         Option<ProfitLoss>,
         Option<CashFlow>,
     ) {
-        // TODO: Implement
-        unimplemented!()
+        todo!()
     }
 
     pub fn to_json(&self) -> String {
-        // TODO: Implement
-        unimplemented!()
+        todo!()
+    }
+
+    pub fn eps() -> f64 {
+        todo!()
+    }
+
+    pub fn diluted_eps(
+        _earn: f64,
+        _pref_div: f64,
+        _shares: f64,
+        _share_price: f64,
+        _options: f64,
+    ) -> f64 {
+        todo!()
     }
 }
 
@@ -538,13 +581,11 @@ pub fn account_from_statements(
     _pl: &Option<ProfitLoss>,
     _cf: &Option<CashFlow>,
 ) -> Account {
-    // TODO: Implement
-    unimplemented!()
+    todo!()
 }
 
 pub fn account_from_json(_js: &String) -> Account {
-    // TODO: Implement
-    unimplemented!()
+    todo!()
 }
 
 pub struct Company {
@@ -579,31 +620,28 @@ impl Company {
     }
 
     pub fn to_account_vec(&self) -> Vec<Account> {
-        // TODO: Implement
-        unimplemented!()
+        todo!()
     }
 
     pub fn to_json(&self) -> String {
-        // TODO: Implement
-        unimplemented!()
+        todo!()
     }
 }
 
 pub fn company_from_account_vec(_ac_vec: &Vec<Account>) -> Company {
-    // TODO: Implement
-    unimplemented!()
+    todo!()
 }
 
 pub fn company_from_json(_js: &String) -> Company {
-    // TODO: Implement
-    unimplemented!()
+    todo!()
 }
 
 #[cfg(test)]
 mod accounts {
     use super::*;
+    use BalanceSheetEntry::*;
     #[test]
-    fn threaded() {
+    fn type_checks() {
         let y = Inventories;
         let (x, _) = BALANCE_SHEET_MAP[0];
         assert_eq!(Inventories, x);
@@ -613,5 +651,18 @@ mod accounts {
         assert!(!RawMaterials.is_calc());
         assert!(Pbitda.is_calc());
         assert!(!Salaries.is_calc());
+        assert_eq!(DEBIT_TYPE.get(&Inventories), None);
+        assert_eq!(DEBIT_TYPE.get(&RawMaterials), Some(&AssetEntry));
+        assert_eq!(DEBIT_TYPE.get(&CurrentAdvances), Some(&AssetEntry));
+        assert_eq!(DEBIT_TYPE.get(&NetPlantPropertyEquipment), None);
+        assert_eq!(DEBIT_TYPE.get(&AccumulatedDepreciation), Some(&AssetContra));
+        assert_eq!(
+            DEBIT_TYPE.get(&AccumulatedAmortizationLeaseRental),
+            Some(&AssetContra)
+        );
+        assert_eq!(DEBIT_TYPE.get(&LongTermLiabilities), None);
+        assert_eq!(DEBIT_TYPE.get(&BondsPayable), Some(&LiabilityEntry));
+        assert_eq!(DEBIT_TYPE.get(&Equity), None);
+        assert_eq!(DEBIT_TYPE.get(&MinorityInterests), Some(&EquityEntry));
     }
 }
