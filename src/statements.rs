@@ -440,7 +440,7 @@ pub trait FinMaps {
     fn calc_elements(&mut self);
     fn clean(&mut self);
     fn to_json(&self) -> String;
-    fn from_json(&mut self, _js: String);
+    fn from_json(_js: String) -> Self;
 }
 
 impl FinMaps for BsMap {
@@ -456,7 +456,7 @@ impl FinMaps for BsMap {
         todo!()
     }
 
-    fn from_json(&mut self, _js: String) {
+    fn from_json(_js: String) -> Self {
         todo!()
     }
 }
@@ -494,10 +494,10 @@ impl BalanceSheet {
     pub fn to_json(&self) -> String {
         todo!()
     }
-}
 
-pub fn balance_sheet_from_json(_js: &String) -> BalanceSheet {
-    todo!()
+    pub fn from_json(_js: &String) -> Self {
+        todo!()
+    }
 }
 
 pub struct ProfitLoss {
@@ -510,10 +510,10 @@ impl ProfitLoss {
     pub fn to_json(&self) -> String {
         todo!()
     }
-}
 
-pub fn profit_loss_from_json(_js: &String) -> ProfitLoss {
-    todo!()
+    pub fn from_json(_js: &String) -> Self {
+        todo!()
+    }
 }
 
 pub struct CashFlow {
@@ -526,10 +526,10 @@ impl CashFlow {
     pub fn to_json(&self) -> String {
         todo!()
     }
-}
 
-pub fn cash_flow_from_json(_js: &String) -> CashFlow {
-    todo!()
+    pub fn from_json(_js: &String) -> Self {
+        todo!()
+    }
 }
 
 pub struct Account {
@@ -573,19 +573,18 @@ impl Account {
     ) -> f64 {
         todo!()
     }
-}
+    pub fn from_statements(
+        _bs0: &Option<BalanceSheet>,
+        _bs1: &Option<BalanceSheet>,
+        _pl: &Option<ProfitLoss>,
+        _cf: &Option<CashFlow>,
+    ) -> Self {
+        todo!()
+    }
 
-pub fn account_from_statements(
-    _bs0: &Option<BalanceSheet>,
-    _bs1: &Option<BalanceSheet>,
-    _pl: &Option<ProfitLoss>,
-    _cf: &Option<CashFlow>,
-) -> Account {
-    todo!()
-}
-
-pub fn account_from_json(_js: &String) -> Account {
-    todo!()
+    pub fn from_json(_js: &String) -> Self {
+        todo!()
+    }
 }
 
 pub struct Company {
@@ -626,14 +625,13 @@ impl Company {
     pub fn to_json(&self) -> String {
         todo!()
     }
-}
+    pub fn from_account_vec(_ac_vec: &Vec<Account>) -> Self {
+        todo!()
+    }
 
-pub fn company_from_account_vec(_ac_vec: &Vec<Account>) -> Company {
-    todo!()
-}
-
-pub fn company_from_json(_js: &String) -> Company {
-    todo!()
+    pub fn from_json(_js: &String) -> Self {
+        todo!()
+    }
 }
 
 #[cfg(test)]
