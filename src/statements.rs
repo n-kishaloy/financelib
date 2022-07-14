@@ -421,7 +421,7 @@ fn debit_mapping(
     calc_pos: BalanceSheetEntry,
     calc_neg: BalanceSheetEntry,
 ) {
-    let (a, b) = BALANCE_SHEET_HASHMAP.get(&calc_type).unwrap();
+    let (a, b) = BALANCE_SHEET_HASHMAP[&calc_type];
     for x in a.iter() {
         if BALANCE_SHEET_CALC.contains(x) {
             debit_mapping(debit_map, *x, calc_pos, calc_neg)
@@ -471,23 +471,36 @@ impl FinMaps for BsMap {
 }
 
 impl BsMapTrait for BsMap {
-    fn debit(&mut self, _ty: BsTyp, _x: f64) {
-        todo!()
-    }
+    fn debit(&mut self, typ: BsTyp, val: f64) {
+        let deb_type = DEBIT_TYPE[&typ];
+        let mut adder = |x| *self.entry(typ).or_insert(0.0) += x;
 
-    fn credit(&mut self, _ty: BsTyp, _x: f64) {
-        todo!()
-    }
-
-    fn transact(&mut self, _deb: BsTyp, _crd: BsTyp, _x: f64) {
-        todo!()
+        use BalanceSheetEntry::*;
+        match deb_type {
+            AssetEntry | LiabilityContra | EquityContra => adder(val),
+            _ => adder(-val),
+        }
     }
 }
 
 pub trait BsMapTrait {
-    fn debit(&mut self, _ty: BsTyp, _x: f64);
-    fn credit(&mut self, _ty: BsTyp, _x: f64);
-    fn transact(&mut self, _deb: BsTyp, _crd: BsTyp, _x: f64);
+    fn debit(&mut self, typ: BsTyp, val: f64);
+
+    fn credit(&mut self, typ: BsTyp, val: f64) {
+        BsMapTrait::debit(self, typ, -val)
+    }
+
+    fn transact(&mut self, tran: (BsTyp, BsTyp, f64)) {
+        let (deb, crd, val) = tran;
+        self.debit(deb, val);
+        self.credit(crd, val);
+    }
+
+    fn transact_series(&mut self, trans: Vec<(BsTyp, BsTyp, f64)>) {
+        for x in trans {
+            self.transact(x)
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -646,15 +659,19 @@ impl Company {
             Some(Account {
                 date_beg: d0,
                 date_end: d1,
-                balance_sheet_beg: (self.balance_sheet.get(&d0).unwrap()).clone(),
-                balance_sheet_end: (self.balance_sheet.get(&d1).unwrap()).clone(),
-                profit_loss: (self.profit_loss.get(&(d0, d1)).unwrap()).clone(),
-                cash_flow: (self.cash_flow.get(&(d0, d1)).unwrap()).clone(),
-                others: (self.others.get(&(d0, d1)).unwrap()).clone(),
+                balance_sheet_beg: self.balance_sheet[&d0].clone(),
+                balance_sheet_end: self.balance_sheet[&d1].clone(),
+                profit_loss: self.profit_loss[&(d0, d1)].clone(),
+                cash_flow: self.cash_flow[&(d0, d1)].clone(),
+                others: self.others[&(d0, d1)].clone(),
             })
         } else {
             None
         }
+    }
+
+    pub fn transact(&mut self, _date: NDt, _deb: BsTyp, _crd: BsTyp, _x: f64) {
+        todo!()
     }
 
     pub fn sort_dates(&mut self) {
@@ -735,8 +752,8 @@ mod accounts {
         // println!("{:?}", acx);
 
         assert!(approx(
-            *ac1.balance_sheet_beg.unwrap().get(&Cash).unwrap(),
-            *acx.balance_sheet_beg.unwrap().get(&Cash).unwrap()
-        ))
+            ac1.balance_sheet_beg.unwrap()[&Cash],
+            acx.balance_sheet_beg.unwrap()[&Cash]
+        ));
     }
 }
