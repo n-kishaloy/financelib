@@ -185,7 +185,10 @@ pub enum FinOthersTyp {
     Fcfd,
 }
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use BsTyp::*;
 use PlTyp::*;
@@ -452,21 +455,39 @@ impl FinType for PlTyp {
 
 pub trait FinMaps {
     fn calc_elements(&mut self);
-    fn clean(&mut self);
+    fn remove_calc(&mut self);
     fn check(&self) -> bool;
+    fn common_size(&self) -> Self;
+
+    fn clean(&mut self);
+}
+
+fn calc_indv_elem<T: Hash + Ord>(hm: &HashMap<T, f64>, x: &Vec<T>) -> f64 {
+    x.iter().map(|z| hm[z]).sum::<f64>()
 }
 
 impl FinMaps for BsMap {
     fn calc_elements(&mut self) {
-        todo!()
+        for (k, (d, b)) in BALANCE_SHEET_MAP.iter() {
+            self.insert(*k, calc_indv_elem(self, d) - calc_indv_elem(self, b));
+        }
     }
 
-    fn clean(&mut self) {
-        todo!()
+    fn remove_calc(&mut self) {
+        self.retain(|k, _| !k.is_calc());
     }
 
     fn check(&self) -> bool {
         todo!()
+    }
+
+    fn common_size(&self) -> Self {
+        let scale = self[&Assets];
+        self.iter().map(|(k, v)| (*k, v / scale)).collect()
+    }
+
+    fn clean(&mut self) {
+        self.retain(|_, v| v.abs() > 1e-5);
     }
 }
 
@@ -585,6 +606,10 @@ impl Account {
         todo!()
     }
 
+    pub fn calc_elements(&mut self) {
+        todo!()
+    }
+
     pub fn balance_sheet_beg(&self) -> Option<BalanceSheet> {
         Some(BalanceSheet {
             date: self.date_beg,
@@ -670,6 +695,10 @@ impl Company {
         }
     }
 
+    pub fn calc_elements(&mut self) {
+        todo!()
+    }
+
     pub fn transact(&mut self, _date: NDt, _deb: BsTyp, _crd: BsTyp, _x: f64) {
         todo!()
     }
@@ -749,7 +778,7 @@ mod accounts {
 
         let ac_js = serde_json::to_string(&ac1).unwrap();
         let acx: Account = serde_json::from_str(&ac_js).unwrap();
-        // println!("{:?}", acx);
+        println!("{:?} !false => {}", acx, !true);
 
         assert!(approx(
             ac1.balance_sheet_beg.unwrap()[&Cash],
