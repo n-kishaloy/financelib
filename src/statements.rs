@@ -17,12 +17,20 @@ use chrono::naive::NaiveDate as NDt;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
+/**
+FinType - Defines Trait for all Financial types
+ */
 pub trait FinType {
     fn is_calc(self) -> bool;
 }
 
+/**
+BsType - Enum for all Balance Sheet types.
+
+This is primarily used in craeting Hashmap for keeping Balance Sheet items.
+ */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
-pub enum BsTyp {
+pub enum BsType {
     Cash,
     CurrentReceivables,
     CurrentLoans,
@@ -90,8 +98,13 @@ pub enum BsTyp {
     Equity,
 }
 
+/**
+PlType - Enum for all Profit and Loss types.
+
+This is primarily used in craeting Hashmap for keeping Profit and Loss items.
+ */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
-pub enum PlTyp {
+pub enum PlType {
     OperatingRevenue,
     NonOperatingRevenue,
     ExciseStaxLevy,
@@ -136,8 +149,13 @@ pub enum PlTyp {
     TotalComprehensiveIncome,
 }
 
+/**
+CfType - Enum for all Cash Flow types.
+
+This is primarily used in craeting Hashmap for keeping Cash Flow items.
+ */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
-pub enum CfTyp {
+pub enum CfType {
     DeferredIncomeTaxes,
     ChangeInventories,
     ChangeReceivables,
@@ -190,11 +208,11 @@ use std::{
     hash::Hash,
 };
 
-use BsTyp::*;
-use PlTyp::*;
+use BsType::*;
+use PlType::*;
 
 lazy_static! {
-    static ref BALANCE_SHEET_MAP: Vec<(BsTyp, (Vec<BsTyp>, Vec<BsTyp>))> = vec![
+    static ref BALANCE_SHEET_MAP: Vec<(BsType, (Vec<BsType>, Vec<BsType>))> = vec![
         (
             Inventories,
             (vec![RawMaterials, WorkInProgress, FinishedGoods], vec![],)
@@ -311,7 +329,7 @@ lazy_static! {
             )
         ),
     ];
-    static ref PROFIT_LOSS_MAP: Vec<(PlTyp, (Vec<PlTyp>, Vec<PlTyp>))> = vec![
+    static ref PROFIT_LOSS_MAP: Vec<(PlType, (Vec<PlType>, Vec<PlType>))> = vec![
         (
             Revenue,
             (
@@ -375,33 +393,34 @@ lazy_static! {
             (vec![NetIncome, OtherComprehensiveIncome], vec![],)
         ),
     ];
-    static ref BALANCE_SHEET_CALC: HashSet<BsTyp> =
+    static ref BALANCE_SHEET_CALC: HashSet<BsType> =
         BALANCE_SHEET_MAP.iter().map(|&(x, _)| x).collect();
-    static ref PROFIT_LOSS_CALC: HashSet<PlTyp> = PROFIT_LOSS_MAP.iter().map(|&(x, _)| x).collect();
-    static ref BALANCE_SHEET_HASHMAP: HashMap<BsTyp, (&'static Vec<BsTyp>, &'static Vec<BsTyp>)> = {
+    static ref PROFIT_LOSS_CALC: HashSet<PlType> =
+        PROFIT_LOSS_MAP.iter().map(|&(x, _)| x).collect();
+    static ref BALANCE_SHEET_HASHMAP: HashMap<BsType, (&'static Vec<BsType>, &'static Vec<BsType>)> = {
         let mut yx = HashMap::new();
         for (k, (p, q)) in BALANCE_SHEET_MAP.iter() {
             yx.insert(*k, (p, q));
         }
         yx
     };
-    static ref DEBIT_TYPE: HashMap<BsTyp, BalanceSheetEntry> = {
+    static ref DEBIT_TYPE: HashMap<BsType, BalanceSheetEntry> = {
         let mut mz = HashMap::new();
         debit_mapping(
             &mut mz,
-            BsTyp::Assets,
+            BsType::Assets,
             BalanceSheetEntry::AssetEntry,
             BalanceSheetEntry::AssetContra,
         );
         debit_mapping(
             &mut mz,
-            BsTyp::Liabilities,
+            BsType::Liabilities,
             BalanceSheetEntry::LiabilityEntry,
             BalanceSheetEntry::LiabilityContra,
         );
         debit_mapping(
             &mut mz,
-            BsTyp::Equity,
+            BsType::Equity,
             BalanceSheetEntry::EquityEntry,
             BalanceSheetEntry::EquityContra,
         );
@@ -419,8 +438,8 @@ enum BalanceSheetEntry {
 }
 
 fn debit_mapping(
-    debit_map: &mut HashMap<BsTyp, BalanceSheetEntry>,
-    calc_type: BsTyp,
+    debit_map: &mut HashMap<BsType, BalanceSheetEntry>,
+    calc_type: BsType,
     calc_pos: BalanceSheetEntry,
     calc_neg: BalanceSheetEntry,
 ) {
@@ -441,13 +460,13 @@ fn debit_mapping(
     }
 }
 
-impl FinType for BsTyp {
+impl FinType for BsType {
     fn is_calc(self) -> bool {
         BALANCE_SHEET_CALC.contains(&self)
     }
 }
 
-impl FinType for PlTyp {
+impl FinType for PlType {
     fn is_calc(self) -> bool {
         PROFIT_LOSS_CALC.contains(&self)
     }
@@ -455,15 +474,15 @@ impl FinType for PlTyp {
 
 pub trait FinMaps {
     fn calc_elements(&mut self);
-    fn remove_calc(&mut self);
+    fn remove_calc_elem(&mut self);
     fn check(&self) -> bool;
     fn common_size(&self) -> Self;
 
     fn clean(&mut self);
 }
 
-fn calc_indv_elem<T: Hash + Ord>(hm: &HashMap<T, f64>, x: &Vec<T>) -> f64 {
-    x.iter().map(|z| hm[z]).sum::<f64>()
+fn calc_indv_elem<T: Hash + Ord + Copy>(hm: &HashMap<T, f64>, x: &Vec<T>) -> f64 {
+    x.iter().map(|z| hm.get(&z).unwrap_or(&0.0)).sum()
 }
 
 impl FinMaps for BsMap {
@@ -473,7 +492,7 @@ impl FinMaps for BsMap {
         }
     }
 
-    fn remove_calc(&mut self) {
+    fn remove_calc_elem(&mut self) {
         self.retain(|k, _| !k.is_calc());
     }
 
@@ -492,7 +511,7 @@ impl FinMaps for BsMap {
 }
 
 impl BsMapTrait for BsMap {
-    fn debit(&mut self, typ: BsTyp, val: f64) {
+    fn debit(&mut self, typ: BsType, val: f64) {
         let deb_type = DEBIT_TYPE[&typ];
         let mut adder = |x| *self.entry(typ).or_insert(0.0) += x;
 
@@ -505,19 +524,19 @@ impl BsMapTrait for BsMap {
 }
 
 pub trait BsMapTrait {
-    fn debit(&mut self, typ: BsTyp, val: f64);
+    fn debit(&mut self, typ: BsType, val: f64);
 
-    fn credit(&mut self, typ: BsTyp, val: f64) {
+    fn credit(&mut self, typ: BsType, val: f64) {
         BsMapTrait::debit(self, typ, -val)
     }
 
-    fn transact(&mut self, tran: (BsTyp, BsTyp, f64)) {
+    fn transact(&mut self, tran: (BsType, BsType, f64)) {
         let (deb, crd, val) = tran;
         self.debit(deb, val);
         self.credit(crd, val);
     }
 
-    fn transact_series(&mut self, trans: Vec<(BsTyp, BsTyp, f64)>) {
+    fn transact_series(&mut self, trans: Vec<(BsType, BsType, f64)>) {
         for x in trans {
             self.transact(x)
         }
@@ -533,9 +552,9 @@ pub struct Param {
     pub valuation: f64,
 }
 
-pub type BsMap = HashMap<BsTyp, f64>;
-pub type PlMap = HashMap<PlTyp, f64>;
-pub type CfMap = HashMap<CfTyp, f64>;
+pub type BsMap = HashMap<BsType, f64>;
+pub type PlMap = HashMap<PlType, f64>;
+pub type CfMap = HashMap<CfType, f64>;
 pub type FinOthersMap = HashMap<FinOthersTyp, f64>;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -699,7 +718,7 @@ impl Company {
         todo!()
     }
 
-    pub fn transact(&mut self, _date: NDt, _deb: BsTyp, _crd: BsTyp, _x: f64) {
+    pub fn transact(&mut self, _date: NDt, _deb: BsType, _crd: BsType, _x: f64) {
         todo!()
     }
 
@@ -779,6 +798,11 @@ mod accounts {
         let ac_js = serde_json::to_string(&ac1).unwrap();
         let acx: Account = serde_json::from_str(&ac_js).unwrap();
         println!("{:?} !false => {}", acx, !true);
+
+        let bg = acx.balance_sheet_beg.clone().unwrap();
+
+        println!("{}", bg.get(&Cash).unwrap_or(&0.0));
+        println!("{}", bg.get(&CommonStock).unwrap_or(&0.0));
 
         assert!(approx(
             ac1.balance_sheet_beg.unwrap()[&Cash],
