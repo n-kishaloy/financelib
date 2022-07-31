@@ -21,13 +21,19 @@ use serde::{Deserialize, Serialize};
 FinType - Defines Trait for all Financial types
  */
 pub trait FinType {
+    /**
+    is_calc - specifies if a item is calculated or entered
+
+    e.g. Cash, Depreciation, Revenue etc are entered while items like Current
+    Assets, Pat etc are calculated from items which are entered.
+     */
     fn is_calc(self) -> bool;
 }
 
 /**
 BsType - Enum for all Balance Sheet types.
 
-This is primarily used in craeting Hashmap for keeping Balance Sheet items.
+This is primarily used in creating Hashmap for keeping Balance Sheet items.
  */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum BsType {
@@ -101,7 +107,7 @@ pub enum BsType {
 /**
 PlType - Enum for all Profit and Loss types.
 
-This is primarily used in craeting Hashmap for keeping Profit and Loss items.
+This is primarily used in creating Hashmap for keeping Profit and Loss items.
  */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum PlType {
@@ -152,44 +158,21 @@ pub enum PlType {
 /**
 CfType - Enum for all Cash Flow types.
 
-This is primarily used in craeting Hashmap for keeping Cash Flow items.
+This is primarily used in creating Hashmap for keeping Cash Flow items.
  */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum CfType {
-    DeferredIncomeTaxes,
-    ChangeInventories,
-    ChangeReceivables,
-    ChangePayables,
-    ChangeLiabilities,
-    ChangeProvisions,
-    OtherCfOperations,
-    StockCompensationExpense,
-    StockCompensationTaxBenefit,
-    AccretionDebtDiscount,
     CashFlowOperations,
-    InvestmentsPpe,
-    InvestmentsCapDevp,
-    InvestmentsLoans,
-    AcqEquityAssets,
-    DisEquityAssets,
-    DisPpe,
-    ChangeInvestments,
-    CfInvestmentInterest,
-    CfInvestmentDividends,
-    OtherCfInvestments,
     CashFlowInvestments,
-    StockSales,
-    StockRepurchase,
-    DebtIssue,
-    DebtRepay,
-    InterestFin,
-    Dividends,
-    DonorContribution,
-    OtherCfFinancing,
     CashFlowFinancing,
     NetCashFlow,
 }
 
+/**
+FinOthersTyp - Enum for all Other types used in Financial statements.
+
+This is primarily used in creating Hashmap for keeping Cash Flow items.
+ */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum FinOthersTyp {
     Taxrate,
@@ -427,6 +410,7 @@ lazy_static! {
         mz
     };
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 enum BalanceSheetEntry {
     AssetEntry,
@@ -472,20 +456,52 @@ impl FinType for PlType {
     }
 }
 
+/**
+FinMaps traits defines some of the common functions operating on HashMaps
+representing BsMap, PlMaps, CfMap
+ */
 pub trait FinMaps {
+    type Key: Copy;
+
+    /**
+    calc_elememts - which calculate the calculated items in a statement like
+    Asset, Current Asset or Pat etc, which are calculated from other entries in
+    the HashMaps
+    */
     fn calc_elements(&mut self);
+
+    /** remove_calc_elem - which removes all calculated elements from a HashMap */
     fn remove_calc_elem(&mut self);
+
+    /** check - which checks if the particular Hashmap with the items are correct */
     fn check(&self) -> bool;
+
+    /** common_size - use to create a common size statement */
     fn common_size(&self) -> Self;
 
+    /** clean - removes all extraneous items in a HashMap. */
     fn clean(&mut self);
+
+    fn add(&mut self, k: Self::Key, v: f64);
+
+    fn add_vec(&mut self, x: &Vec<(Self::Key, f64)>) {
+        for (k, v) in x.iter() {
+            self.add(*k, *v);
+        }
+    }
+
+    fn upsert_vec(&mut self, x: &Vec<(Self::Key, f64)>);
+
+    fn value(&self, k: Self::Key) -> f64;
 }
 
 fn calc_indv_elem<T: Hash + Ord + Copy>(hm: &HashMap<T, f64>, x: &Vec<T>) -> f64 {
-    x.iter().map(|z| hm.get(&z).unwrap_or(&0.0)).sum()
+    x.iter().map(|k| *hm.get(k).unwrap_or(&0.0)).sum()
 }
 
 impl FinMaps for BsMap {
+    type Key = BsType;
+
     fn calc_elements(&mut self) {
         for (k, (d, b)) in BALANCE_SHEET_MAP.iter() {
             self.insert(*k, calc_indv_elem(self, d) - calc_indv_elem(self, b));
@@ -497,6 +513,7 @@ impl FinMaps for BsMap {
     }
 
     fn check(&self) -> bool {
+        // TODO: Add implementation
         todo!()
     }
 
@@ -508,17 +525,28 @@ impl FinMaps for BsMap {
     fn clean(&mut self) {
         self.retain(|_, v| v.abs() > 1e-5);
     }
+
+    fn add(&mut self, k: Self::Key, v: f64) {
+        *self.entry(k).or_insert(0.0) += v
+    }
+
+    fn upsert_vec(&mut self, x: &Vec<(Self::Key, f64)>) {
+        for (k, v) in x.iter() {
+            self.insert(*k, *v);
+        }
+    }
+
+    fn value(&self, k: Self::Key) -> f64 {
+        *self.get(&k).unwrap_or(&0.0)
+    }
 }
 
 impl BsMapTrait for BsMap {
-    fn debit(&mut self, typ: BsType, val: f64) {
-        let deb_type = DEBIT_TYPE[&typ];
-        let mut adder = |x| *self.entry(typ).or_insert(0.0) += x;
-
+    fn debit(&mut self, k: BsType, v: f64) {
         use BalanceSheetEntry::*;
-        match deb_type {
-            AssetEntry | LiabilityContra | EquityContra => adder(val),
-            _ => adder(-val),
+        match DEBIT_TYPE[&k] {
+            AssetEntry | LiabilityContra | EquityContra => self.add(k, v),
+            _ => self.add(k, -v),
         }
     }
 }
@@ -622,10 +650,12 @@ impl Account {
         _pl: &Option<ProfitLoss>,
         _cf: &Option<CashFlow>,
     ) -> Option<Self> {
+        // TODO: Add implementation
         todo!()
     }
 
     pub fn calc_elements(&mut self) {
+        // TODO: Add implementation
         todo!()
     }
 
@@ -668,6 +698,7 @@ impl Account {
     }
 
     pub fn eps() -> f64 {
+        // TODO: Add implementation
         todo!()
     }
 
@@ -678,6 +709,7 @@ impl Account {
         _share_price: f64,
         _options: f64,
     ) -> f64 {
+        // TODO: Add implementation
         todo!()
     }
 }
@@ -715,22 +747,27 @@ impl Company {
     }
 
     pub fn calc_elements(&mut self) {
+        // TODO: Add implementation
         todo!()
     }
 
     pub fn transact(&mut self, _date: NDt, _deb: BsType, _crd: BsType, _x: f64) {
+        // TODO: Add implementation
         todo!()
     }
 
     pub fn sort_dates(&mut self) {
+        // TODO: Add implementation
         todo!()
     }
 
     pub fn to_account_vec(&self) -> Vec<Account> {
+        // TODO: Add implementation
         todo!()
     }
 
     pub fn from_account_vec(_ac_vec: &Vec<Account>) -> Self {
+        // TODO: Add implementation
         todo!()
     }
 }
@@ -769,15 +806,6 @@ mod accounts {
 
     #[test]
     fn account_check() {
-        // let b0 = BalanceSheet {
-        //     date: NDt::from_ymd(2009, 05, 22),
-        //     items: HashMap::from([(Cash, 23.5), (Equity, 12.5)]),
-        // };
-        // let b1 = BalanceSheet {
-        //     date: NDt::from_ymd(2010, 09, 20),
-        //     items: HashMap::from([(Cash, 14.5), (CurrentLoans, 10.5)]),
-        // };
-
         let ac1 = Account {
             date_beg: NDt::from_ymd(2009, 05, 22),
             date_end: NDt::from_ymd(2010, 09, 27),
@@ -797,16 +825,25 @@ mod accounts {
 
         let ac_js = serde_json::to_string(&ac1).unwrap();
         let acx: Account = serde_json::from_str(&ac_js).unwrap();
-        println!("{:?} !false => {}", acx, !true);
+        // println!("{:?} !true => {}", acx, !true);
 
         let bg = acx.balance_sheet_beg.clone().unwrap();
 
-        println!("{}", bg.get(&Cash).unwrap_or(&0.0));
-        println!("{}", bg.get(&CommonStock).unwrap_or(&0.0));
+        assert!(approx(bg.value(Cash), 23.5));
+        assert!(approx(bg.value(CommonStock), 0.0));
 
         assert!(approx(
             ac1.balance_sheet_beg.unwrap()[&Cash],
             acx.balance_sheet_beg.unwrap()[&Cash]
         ));
+
+        let mut bs = BalanceSheet {
+            date: NDt::from_ymd(2018, 3, 31),
+            items: HashMap::from([(Cash, 30.45), (CurrentReceivables, 80.56)]),
+        };
+
+        bs.date = NDt::from_ymd(2018, 3, 30);
+
+        println!("{:?}", bs);
     }
 }

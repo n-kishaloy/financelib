@@ -13,7 +13,5 @@ ndarray-stats = { version = "*" }
 nalgebra = { version = "*" }
 argmin = { version = "*" }
 lazy_static = { version = "*" }
-
-
 serde = { version = "*", features = ["derive"] }
 serde_json = { version = "*" }
