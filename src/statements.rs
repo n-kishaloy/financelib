@@ -186,12 +186,14 @@ pub enum FinOthersTyp {
     Fcfd,
 }
 
+use core::panic;
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
 };
 
 use BsType::*;
+use CfType::*;
 use PlType::*;
 
 lazy_static! {
@@ -456,6 +458,12 @@ impl FinType for PlType {
     }
 }
 
+impl FinType for CfType {
+    fn is_calc(self) -> bool {
+        true
+    }
+}
+
 /**
 FinMaps traits defines some of the common functions operating on HashMaps
 representing BsMap, PlMaps, CfMap
@@ -468,10 +476,10 @@ pub trait FinMaps {
     Asset, Current Asset or Pat etc, which are calculated from other entries in
     the HashMaps
     */
-    fn calc_elements(&mut self);
+    fn calc_elements(&mut self) -> &mut Self;
 
     /** remove_calc_elem - which removes all calculated elements from a HashMap */
-    fn remove_calc_elem(&mut self);
+    fn remove_calc_elem(&mut self) -> &mut Self;
 
     /** check - which checks if the particular Hashmap with the items are correct */
     fn check(&self) -> bool;
@@ -480,18 +488,36 @@ pub trait FinMaps {
     fn common_size(&self) -> Self;
 
     /** clean - removes all extraneous items in a HashMap. */
-    fn clean(&mut self);
+    fn clean(&mut self) -> &mut Self;
 
-    fn add(&mut self, k: Self::Key, v: f64);
+    /**
+    Add value v to item k, if k does not exits then insert new item k with value v
+    */
+    fn add(&mut self, k: Self::Key, v: f64) -> &mut Self;
 
-    fn add_vec(&mut self, x: &Vec<(Self::Key, f64)>) {
+    /**
+    upsert (update/insert), update value v to item k, if k does not exits
+    then insert new item k with value v
+    */
+    fn upsert(&mut self, k: Self::Key, v: f64) -> &mut Self;
+
+    /** add items from a vector of tuples */
+    fn add_vec(&mut self, x: &Vec<(Self::Key, f64)>) -> &mut Self {
         for (k, v) in x.iter() {
             self.add(*k, *v);
         }
+        self
     }
 
-    fn upsert_vec(&mut self, x: &Vec<(Self::Key, f64)>);
+    /** upsert items from a vector of tuples */
+    fn upsert_vec(&mut self, x: &Vec<(Self::Key, f64)>) -> &mut Self {
+        for (k, v) in x.iter() {
+            self.upsert(*k, *v);
+        }
+        self
+    }
 
+    /** return the value of key k */
     fn value(&self, k: Self::Key) -> f64;
 }
 
@@ -502,14 +528,16 @@ fn calc_indv_elem<T: Hash + Ord + Copy>(hm: &HashMap<T, f64>, x: &Vec<T>) -> f64
 impl FinMaps for BsMap {
     type Key = BsType;
 
-    fn calc_elements(&mut self) {
+    fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in BALANCE_SHEET_MAP.iter() {
             self.insert(*k, calc_indv_elem(self, d) - calc_indv_elem(self, b));
         }
+        self
     }
 
-    fn remove_calc_elem(&mut self) {
+    fn remove_calc_elem(&mut self) -> &mut Self {
         self.retain(|k, _| !k.is_calc());
+        self
     }
 
     fn check(&self) -> bool {
@@ -522,18 +550,27 @@ impl FinMaps for BsMap {
         self.iter().map(|(k, v)| (*k, v / scale)).collect()
     }
 
-    fn clean(&mut self) {
+    fn clean(&mut self) -> &mut Self {
         self.retain(|_, v| v.abs() > 1e-5);
+        self
     }
 
-    fn add(&mut self, k: Self::Key, v: f64) {
-        *self.entry(k).or_insert(0.0) += v
-    }
-
-    fn upsert_vec(&mut self, x: &Vec<(Self::Key, f64)>) {
-        for (k, v) in x.iter() {
-            self.insert(*k, *v);
+    fn add(&mut self, k: Self::Key, v: f64) -> &mut Self {
+        if k.is_calc() {
+            panic!("Entering a calc item {:?}", k)
+        } else {
+            *self.entry(k).or_insert(0.0) += v;
         }
+        self
+    }
+
+    fn upsert(&mut self, k: Self::Key, v: f64) -> &mut Self {
+        if k.is_calc() {
+            panic!("Entering a calc item {:?}", k)
+        } else {
+            self.insert(k, v);
+        }
+        self
     }
 
     fn value(&self, k: Self::Key) -> f64 {
@@ -542,7 +579,7 @@ impl FinMaps for BsMap {
 }
 
 impl BsMapTrait for BsMap {
-    fn debit(&mut self, k: BsType, v: f64) {
+    fn debit(&mut self, k: BsType, v: f64) -> &mut Self {
         use BalanceSheetEntry::*;
         match DEBIT_TYPE[&k] {
             AssetEntry | LiabilityContra | EquityContra => self.add(k, v),
@@ -552,22 +589,125 @@ impl BsMapTrait for BsMap {
 }
 
 pub trait BsMapTrait {
-    fn debit(&mut self, typ: BsType, val: f64);
+    fn debit(&mut self, typ: BsType, val: f64) -> &mut Self;
 
-    fn credit(&mut self, typ: BsType, val: f64) {
+    fn credit(&mut self, typ: BsType, val: f64) -> &mut Self {
         BsMapTrait::debit(self, typ, -val)
     }
 
-    fn transact(&mut self, tran: (BsType, BsType, f64)) {
-        let (deb, crd, val) = tran;
-        self.debit(deb, val);
-        self.credit(crd, val);
+    fn transact(&mut self, (deb, crd, val): (BsType, BsType, f64)) -> &mut Self {
+        self.debit(deb, val).credit(crd, val)
     }
 
-    fn transact_series(&mut self, trans: Vec<(BsType, BsType, f64)>) {
+    fn transact_series(&mut self, trans: Vec<(BsType, BsType, f64)>) -> &mut Self {
         for x in trans {
-            self.transact(x)
+            self.transact(x);
         }
+        self
+    }
+}
+
+impl FinMaps for PlMap {
+    type Key = PlType;
+
+    fn calc_elements(&mut self) -> &mut Self {
+        for (k, (d, b)) in PROFIT_LOSS_MAP.iter() {
+            self.insert(*k, calc_indv_elem(self, d) - calc_indv_elem(self, b));
+        }
+        self
+    }
+
+    fn remove_calc_elem(&mut self) -> &mut Self {
+        self.retain(|k, _| !k.is_calc());
+        self
+    }
+
+    fn check(&self) -> bool {
+        // TODO: Add implementation
+        todo!()
+    }
+
+    fn common_size(&self) -> Self {
+        let scale = self[&Revenue];
+        self.iter().map(|(k, v)| (*k, v / scale)).collect()
+    }
+
+    fn clean(&mut self) -> &mut Self {
+        self.retain(|_, v| v.abs() > 1e-5);
+        self
+    }
+
+    fn add(&mut self, k: Self::Key, v: f64) -> &mut Self {
+        if k.is_calc() {
+            panic!("Entering a calc item {:?}", k)
+        } else {
+            *self.entry(k).or_insert(0.0) += v;
+        }
+        self
+    }
+
+    fn upsert(&mut self, k: Self::Key, v: f64) -> &mut Self {
+        if k.is_calc() {
+            panic!("Entering a calc item {:?}", k)
+        } else {
+            self.insert(k, v);
+        }
+        self
+    }
+
+    fn value(&self, k: Self::Key) -> f64 {
+        *self.get(&k).unwrap_or(&0.0)
+    }
+}
+
+impl FinMaps for CfMap {
+    type Key = CfType;
+
+    fn calc_elements(&mut self) -> &mut Self {
+        // TODO: Implement calc_elememts for CfMap
+        todo!()
+    }
+
+    fn remove_calc_elem(&mut self) -> &mut Self {
+        // TODO: Implement remove_calc_elem for CfMap
+        todo!()
+    }
+
+    fn check(&self) -> bool {
+        // TODO: Add implementation
+        todo!()
+    }
+
+    fn common_size(&self) -> Self {
+        let scale = self[&NetCashFlow];
+        self.iter().map(|(k, v)| (*k, v / scale)).collect()
+    }
+
+    fn clean(&mut self) -> &mut Self {
+        self.retain(|_, v| v.abs() > 1e-5);
+        self
+    }
+
+    fn add(&mut self, k: Self::Key, v: f64) -> &mut Self {
+        if k.is_calc() {
+            panic!("Entering a calc item {:?}", k)
+        } else {
+            *self.entry(k).or_insert(0.0) += v;
+        }
+        self
+    }
+
+    fn upsert(&mut self, k: Self::Key, v: f64) -> &mut Self {
+        if k.is_calc() {
+            panic!("Entering a calc item {:?}", k)
+        } else {
+            self.insert(k, v);
+        }
+        self
+    }
+
+    fn value(&self, k: Self::Key) -> f64 {
+        *self.get(&k).unwrap_or(&0.0)
     }
 }
 
@@ -649,12 +789,13 @@ impl Account {
         _bs1: &Option<BalanceSheet>,
         _pl: &Option<ProfitLoss>,
         _cf: &Option<CashFlow>,
+        _ft: &FinOthers,
     ) -> Option<Self> {
         // TODO: Add implementation
         todo!()
     }
 
-    pub fn calc_elements(&mut self) {
+    pub fn calc_elements(&mut self) -> &mut Self {
         // TODO: Add implementation
         todo!()
     }
@@ -746,17 +887,17 @@ impl Company {
         }
     }
 
-    pub fn calc_elements(&mut self) {
+    pub fn calc_elements(&mut self) -> &mut Self {
         // TODO: Add implementation
         todo!()
     }
 
-    pub fn transact(&mut self, _date: NDt, _deb: BsType, _crd: BsType, _x: f64) {
+    pub fn transact(&mut self, _date: NDt, _deb: BsType, _crd: BsType, _x: f64) -> &mut Self {
         // TODO: Add implementation
         todo!()
     }
 
-    pub fn sort_dates(&mut self) {
+    pub fn sort_dates(&mut self) -> &mut Self {
         // TODO: Add implementation
         todo!()
     }
@@ -766,7 +907,7 @@ impl Company {
         todo!()
     }
 
-    pub fn from_account_vec(_ac_vec: &Vec<Account>) -> Self {
+    pub fn from_account_vec(&mut self, _ac_vec: &Vec<Account>) -> &mut Self {
         // TODO: Add implementation
         todo!()
     }
@@ -839,11 +980,55 @@ mod accounts {
 
         let mut bs = BalanceSheet {
             date: NDt::from_ymd(2018, 3, 31),
-            items: HashMap::from([(Cash, 30.45), (CurrentReceivables, 80.56)]),
+            items: BsMap::from([(Cash, 30.45), (CurrentReceivables, 80.56)]),
         };
+
+        bs.items
+            .upsert_vec(&vec![(Cash, 24.45), (CurrentLoans, 34.56)])
+            .add(WorkInProgress, 15.6)
+            .add_vec(&vec![(Cash, 15.23), (RawMaterials, 87.5)])
+            // .upsert(Assets, 58.5) // Calc item
+            .upsert(CurrentPayables, 89.5)
+            .add(RawMaterials, 12.13)
+            .upsert(CurrentLoans, 22.86);
 
         bs.date = NDt::from_ymd(2018, 3, 30);
 
-        println!("{:?}", bs);
+        assert!(approx(bs.items.value(Cash), 39.68));
+        assert!(approx(bs.items.value(RawMaterials), 99.63));
+        assert!(approx(bs.items.value(WorkInProgress), 15.6));
+        assert!(approx(bs.items.value(CurrentPayables), 89.5));
+        assert!(approx(bs.items.value(CurrentLoans), 22.86));
+        assert!(approx(bs.items.value(Equity), 0.0));
+
+        let mut pl = ProfitLoss {
+            date_beg: NDt::from_ymd(2018, 3, 31),
+            date_end: NDt::from_ymd(2018, 06, 30),
+            items: PlMap::from([(OperatingRevenue, 58.35), (OtherExpenses, 41.58)]),
+        };
+
+        pl.items
+            .upsert(OperatingRevenue, 15.76)
+            .upsert_vec(&vec![(CostMaterial, 55.87), (OperatingRevenue, 88.65)])
+            .add(OperatingRevenue, -22.6);
+
+        assert!(approx(pl.items.value(OperatingRevenue), 66.05));
+        assert!(approx(pl.items.value(Pat), 0.0));
+
+        let cf = CashFlow {
+            date_beg: NDt::from_ymd(2018, 3, 31),
+            date_end: NDt::from_ymd(2018, 06, 30),
+            items: CfMap::from([(CashFlowFinancing, 58.35), (NetCashFlow, 41.58)]),
+        };
+
+        // cf.items
+        //     .upsert(CashFlowFinancing, 15.76)
+        //     .upsert_vec(&vec![(NetCashFlow, 55.87), (CashFlowFinancing, 88.65)])
+        //     .add(CashFlowFinancing, -22.6);
+
+        assert!(approx(cf.items.value(CashFlowFinancing), 58.35));
+        assert!(approx(cf.items.value(CashFlowInvestments), 0.0));
+
+        // println!("{:?}", cf);
     }
 }
