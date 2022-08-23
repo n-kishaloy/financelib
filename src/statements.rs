@@ -146,6 +146,8 @@ pub enum PlType {
     Pat,
     NetIncomeDiscontinuedOps,
     NetIncome,
+    Dividends,
+    ContributionRetainedEarnings,
     GainsLossesForex,
     GainsLossesActurial,
     GainsLossesSales,
@@ -162,8 +164,29 @@ This is primarily used in creating Hashmap for keeping Cash Flow items.
  */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum CfType {
+    ChangeCurrentAssets,
+    ChangeLongTermAssets,
+    ChangeCurrentLiabilities,
+    ChangeLongTermLiabilities,
+    ChangeProvisions,
+    ChangeRetainedEarnings,
+    AdjustmentsRetainedEarnings,
+    ChangeAccumulatedOci,
+    OtherCashFlowOperations,
     CashFlowOperations,
+    ChangePPE,
+    InvestmentsCapDevp,
+    InvestmentsLoans,
+    ChangeEquityAssets,
+    ChangeInvestments,
+    OtherCashFlowInvestments,
     CashFlowInvestments,
+    StockSalesAndPurchase,
+    ChangeDebt,
+    CashFlowInterests,
+    CashFlowDividends,
+    DonorContribution,
+    OtherCashFlowFinancing,
     CashFlowFinancing,
     NetCashFlow,
 }
@@ -180,10 +203,10 @@ pub enum FinOthersTyp {
     AcidRatio,
     DaysOfInventory,
     InventoryTurnoverRatio,
-    Fcff,
-    Fcfs,
-    Fcfe,
-    Fcfd,
+    FCFF,
+    FCFS,
+    FCFE,
+    FCFD,
 }
 
 use core::panic;
@@ -362,6 +385,10 @@ lazy_static! {
         (Pat, (vec![Pbt], vec![TaxesCurrent, TaxesDeferred],)),
         (NetIncome, (vec![Pat, NetIncomeDiscontinuedOps], vec![],)),
         (
+            ContributionRetainedEarnings,
+            (vec![NetIncome], vec![Dividends])
+        ),
+        (
             OtherComprehensiveIncome,
             (
                 vec![
@@ -378,10 +405,60 @@ lazy_static! {
             (vec![NetIncome, OtherComprehensiveIncome], vec![],)
         ),
     ];
+    static ref CASH_FLOW_MAP: Vec<(CfType, (Vec<CfType>, Vec<CfType>))> = vec![
+        (
+            CashFlowOperations,
+            (
+                vec![
+                    ChangeCurrentLiabilities,
+                    ChangeLongTermLiabilities,
+                    ChangeProvisions,
+                    ChangeRetainedEarnings,
+                    AdjustmentsRetainedEarnings,
+                    ChangeAccumulatedOci,
+                    OtherCashFlowOperations
+                ],
+                vec![ChangeCurrentAssets, ChangeLongTermAssets]
+            ),
+        ),
+        (
+            CashFlowInvestments,
+            (
+                vec![OtherCashFlowInvestments],
+                vec![
+                    ChangePPE,
+                    InvestmentsCapDevp,
+                    InvestmentsLoans,
+                    ChangeEquityAssets,
+                    ChangeInvestments
+                ]
+            )
+        ),
+        (
+            CashFlowFinancing,
+            (
+                vec![
+                    StockSalesAndPurchase,
+                    ChangeDebt,
+                    DonorContribution,
+                    OtherCashFlowFinancing
+                ],
+                vec![CashFlowInterests, CashFlowDividends]
+            )
+        ),
+        (
+            NetCashFlow,
+            (
+                vec![CashFlowOperations, CashFlowInvestments, CashFlowFinancing],
+                vec![]
+            )
+        )
+    ];
     static ref BALANCE_SHEET_CALC: HashSet<BsType> =
         BALANCE_SHEET_MAP.iter().map(|&(x, _)| x).collect();
     static ref PROFIT_LOSS_CALC: HashSet<PlType> =
         PROFIT_LOSS_MAP.iter().map(|&(x, _)| x).collect();
+    static ref CASH_FLOW_CALC: HashSet<CfType> = CASH_FLOW_MAP.iter().map(|&(x, _)| x).collect();
     static ref BALANCE_SHEET_HASHMAP: HashMap<BsType, (&'static Vec<BsType>, &'static Vec<BsType>)> = {
         let mut yx = HashMap::new();
         for (k, (p, q)) in BALANCE_SHEET_MAP.iter() {
@@ -460,7 +537,7 @@ impl FinType for PlType {
 
 impl FinType for CfType {
     fn is_calc(self) -> bool {
-        true
+        CASH_FLOW_CALC.contains(&self)
     }
 }
 
@@ -660,17 +737,33 @@ impl FinMaps for PlMap {
     }
 }
 
+/**
+derive_cash_flow - Derives the non-calc items of the Cash Flow statement from
+the beginning and ending Balance Sheets given as BsMap and Profit Loss statement
+given as PlMap.
+
+Note that you have to still run the calc_elements function to compute the full
+Cash Flow statement. This function just provides an easy way to derive them of
+a Balance Sheet.
+ */
+pub fn derive_cash_flow(_bs_beg: &BsMap, _bs_end: &BsMap, _pl: &PlMap) -> CfMap {
+    // TODO: Implement derive_cash_flow
+    todo!()
+}
+
 impl FinMaps for CfMap {
     type Key = CfType;
 
     fn calc_elements(&mut self) -> &mut Self {
-        // TODO: Implement calc_elememts for CfMap
-        todo!()
+        for (k, (d, b)) in CASH_FLOW_MAP.iter() {
+            self.insert(*k, calc_indv_elem(self, d) - calc_indv_elem(self, b));
+        }
+        self
     }
 
     fn remove_calc_elem(&mut self) -> &mut Self {
-        // TODO: Implement remove_calc_elem for CfMap
-        todo!()
+        self.retain(|k, _| !k.is_calc());
+        self
     }
 
     fn check(&self) -> bool {
@@ -785,14 +878,50 @@ impl Account {
     }
 
     pub fn from_statements(
-        _bs0: &Option<BalanceSheet>,
-        _bs1: &Option<BalanceSheet>,
-        _pl: &Option<ProfitLoss>,
-        _cf: &Option<CashFlow>,
-        _ft: &FinOthers,
+        bs0: &Option<BalanceSheet>,
+        bs1: &Option<BalanceSheet>,
+        plx: &Option<ProfitLoss>,
+        cf: &Option<CashFlow>,
+        ft: &FinOthers,
     ) -> Option<Self> {
-        // TODO: Add implementation
-        todo!()
+        if let Some(pl) = plx {
+            let bs_dt = |dt, bs: &Option<BalanceSheet>| match bs {
+                Some(bsp) => (bsp.date, Some(bsp.items.clone())),
+                _ => (dt, None),
+            };
+
+            let cf_dt = |dt0, dt1, cf: &Option<CashFlow>| match cf {
+                Some(cfp) => (cfp.date_beg, cfp.date_end, Some(cfp.items.clone())),
+                _ => (dt0, dt1, None),
+            };
+
+            let (date_beg, date_end, px) = (pl.date_beg, pl.date_end, pl.items.clone());
+            let (dbt0, balance_sheet_beg) = bs_dt(date_beg, bs0);
+            let (dbt1, balance_sheet_end) = bs_dt(date_end, bs1);
+            let (dct0, dct1, cash_flow) = cf_dt(date_beg, date_end, cf);
+            let (dft0, dft1, others) = (ft.date_beg, ft.date_end, ft.items.clone());
+            if date_beg == dbt0
+                && date_beg == dct0
+                && date_beg == dft0
+                && date_end == dbt1
+                && date_end == dct1
+                && date_end == dft1
+            {
+                Some(Account {
+                    date_beg,
+                    date_end,
+                    balance_sheet_beg,
+                    balance_sheet_end,
+                    profit_loss: Some(px),
+                    cash_flow,
+                    others,
+                })
+            } else {
+                None
+            }
+        } else {
+            panic!("Profit Loss should not be None")
+        }
     }
 
     pub fn calc_elements(&mut self) -> &mut Self {
@@ -839,7 +968,7 @@ impl Account {
     }
 
     pub fn eps() -> f64 {
-        // TODO: Add implementation
+        // TODO: Add implementation of EPS
         todo!()
     }
 
@@ -850,7 +979,7 @@ impl Account {
         _share_price: f64,
         _options: f64,
     ) -> f64 {
-        // TODO: Add implementation
+        // TODO: Add implementation of Diluted EPS
         todo!()
     }
 }
