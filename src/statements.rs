@@ -213,6 +213,7 @@ use core::panic;
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
+    vec,
 };
 
 use BsType::*;
@@ -454,6 +455,124 @@ lazy_static! {
             )
         )
     ];
+    static ref CASH_FLOW_BALANCE_SHEET: Vec<(CfType, (Vec<BsType>, Vec<BsType>))> = vec![
+        (
+            ChangeCurrentAssets,
+            (
+                vec![],
+                vec![
+                    CurrentReceivables,
+                    CurrentLoans,
+                    CurrentAdvances,
+                    OtherCurrentAssets,
+                    CurrentInvestments,
+                    RawMaterials,
+                    WorkInProgress,
+                    FinishedGoods,
+                ]
+            )
+        ),
+        (
+            ChangeLongTermAssets,
+            (
+                vec![
+                    AccumulatedDepreciation,
+                    AccumulatedAmortizationLeaseRental,
+                    AccumulatedAmortization,
+                ],
+                vec![AccountReceivables, LongTermAdvances, CapitalWip,]
+            )
+        ),
+        (
+            ChangeCurrentLiabilities,
+            (
+                vec![
+                    CurrentPayables,
+                    CurrentBorrowings,
+                    CurrentNotesPayable,
+                    OtherCurrentLiabilities,
+                    InterestPayable,
+                    CurrentProvisions,
+                    CurrentTaxPayables,
+                    LiabilitiesSaleAssets,
+                    CurrentLeasesLiability,
+                ],
+                vec![]
+            )
+        ),
+        (
+            ChangeLongTermLiabilities,
+            (
+                vec![
+                    AccountPayables,
+                    DeferredTaxLiabilities,
+                    DeferredCompensation,
+                    DeferredRevenues,
+                    CustomerDeposits,
+                    OtherLongTermLiabilities,
+                ],
+                vec![]
+            )
+        ),
+        (
+            ChangeProvisions,
+            (
+                vec![PensionProvision, TaxProvision, LongTermProvision,],
+                vec![]
+            )
+        ),
+        (ChangeRetainedEarnings, (vec![RetainedEarnings,], vec![])),
+        (ChangeAccumulatedOci, (vec![AccumulatedOci,], vec![])),
+        (
+            ChangePPE,
+            (
+                vec![RevaluationReserves, Reserves,],
+                vec![PlantPropertyEquipment, LeasingRentalAssets,]
+            )
+        ),
+        (
+            InvestmentsCapDevp,
+            (vec![], vec![IntangibleAssetsDevelopment,])
+        ),
+        (InvestmentsLoans, (vec![], vec![LongTermLoanAssets,])),
+        (ChangeEquityAssets, (vec![], vec![IntangibleAssets,])),
+        (
+            ChangeInvestments,
+            (vec![], vec![LongTermInvestments, Goodwill,])
+        ),
+        (
+            OtherCashFlowInvestments,
+            (vec![], vec![OtherLongTermAssets, OtherTangibleAssets,])
+        ),
+        (
+            StockSalesAndPurchase,
+            (
+                vec![
+                    CommonStock,
+                    PreferredStock,
+                    PdInCapAbovePar,
+                    PdInCapTreasuryStock,
+                ],
+                vec![]
+            )
+        ),
+        (
+            ChangeDebt,
+            (
+                vec![LongTermBorrowings, BondsPayable, LongTermLeasesLiability,],
+                vec![]
+            )
+        ),
+        (OtherCashFlowFinancing, (vec![MinorityInterests,], vec![])),
+    ];
+    static ref CASH_FLOW_PROFIT_LOSS: Vec<(CfType, (Vec<PlType>, Vec<PlType>))> = vec![
+        (CashFlowInterests, (vec![InterestExpense, CostDebt], vec![])),
+        (CashFlowDividends, (vec![Dividends], vec![])),
+        (
+            AdjustmentsRetainedEarnings,
+            (vec![InterestExpense, CostDebt, Dividends], vec![])
+        )
+    ];
     static ref BALANCE_SHEET_CALC: HashSet<BsType> =
         BALANCE_SHEET_MAP.iter().map(|&(x, _)| x).collect();
     static ref PROFIT_LOSS_CALC: HashSet<PlType> =
@@ -546,7 +665,7 @@ FinMaps traits defines some of the common functions operating on HashMaps
 representing BsMap, PlMaps, CfMap
  */
 pub trait FinMaps {
-    type Key: Copy;
+    type Key: Copy + Eq + Hash;
 
     /**
     calc_elememts - which calculate the calculated items in a statement like
@@ -598,8 +717,9 @@ pub trait FinMaps {
     fn value(&self, k: Self::Key) -> f64;
 }
 
-fn calc_indv_elem<T: Hash + Ord + Copy>(hm: &HashMap<T, f64>, x: &Vec<T>) -> f64 {
-    x.iter().map(|k| *hm.get(k).unwrap_or(&0.0)).sum()
+fn calc_elem<T: Hash + Ord + Copy>(hm: &HashMap<T, f64>, x: &Vec<T>, y: &Vec<T>) -> f64 {
+    x.iter().map(|k| *hm.get(k).unwrap_or(&0.0)).sum::<f64>()
+        - y.iter().map(|k| *hm.get(k).unwrap_or(&0.0)).sum::<f64>()
 }
 
 impl FinMaps for BsMap {
@@ -607,7 +727,7 @@ impl FinMaps for BsMap {
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in BALANCE_SHEET_MAP.iter() {
-            self.insert(*k, calc_indv_elem(self, d) - calc_indv_elem(self, b));
+            self.insert(*k, calc_elem(self, d, b));
         }
         self
     }
@@ -689,7 +809,7 @@ impl FinMaps for PlMap {
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in PROFIT_LOSS_MAP.iter() {
-            self.insert(*k, calc_indv_elem(self, d) - calc_indv_elem(self, b));
+            self.insert(*k, calc_elem(self, d, b));
         }
         self
     }
@@ -746,9 +866,15 @@ Note that you have to still run the calc_elements function to compute the full
 Cash Flow statement. This function just provides an easy way to derive them of
 a Balance Sheet.
  */
-pub fn derive_cash_flow(_bs_beg: &BsMap, _bs_end: &BsMap, _pl: &PlMap) -> CfMap {
-    // TODO: Implement derive_cash_flow
-    todo!()
+pub fn derive_cash_flow(bs_beg: &BsMap, bs_end: &BsMap, pl: &PlMap) -> CfMap {
+    let mut cf = CfMap::new();
+    for (k, (d, b)) in CASH_FLOW_PROFIT_LOSS.iter() {
+        cf.insert(*k, calc_elem(pl, d, b));
+    }
+    for (k, (d, b)) in CASH_FLOW_BALANCE_SHEET.iter() {
+        cf.insert(*k, calc_elem(bs_end, d, b) - calc_elem(bs_beg, d, b));
+    }
+    cf
 }
 
 impl FinMaps for CfMap {
@@ -756,7 +882,7 @@ impl FinMaps for CfMap {
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in CASH_FLOW_MAP.iter() {
-            self.insert(*k, calc_indv_elem(self, d) - calc_indv_elem(self, b));
+            self.insert(*k, calc_elem(self, d, b));
         }
         self
     }
