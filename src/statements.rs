@@ -209,9 +209,25 @@ pub enum FinOthersTyp {
     FCFD,
 }
 
+/**
+This is for Affiliation to different types of Industry of the economy
+*/
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
+pub enum Industry {
+    General,
+    Automotive,
+    Aerospace,
+    HeavyEngineering,
+    InformationTech,
+    Banking,
+    Metals,
+    Retail,
+    Education,
+}
+
 use core::panic;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{btree_set::IntoIter, BTreeMap, BTreeSet, HashMap, HashSet},
     hash::Hash,
     vec,
 };
@@ -981,7 +997,7 @@ pub struct Account {
     pub profit_loss: Option<PlMap>,
     pub cash_flow: Option<CfMap>,
 
-    pub others: FinOthersMap,
+    pub others: Option<FinOthersMap>,
 }
 
 impl Account {
@@ -992,7 +1008,7 @@ impl Account {
         Option<BalanceSheet>,
         Option<ProfitLoss>,
         Option<CashFlow>,
-        FinOthers,
+        Option<FinOthers>,
     ) {
         (
             self.balance_sheet_beg(),
@@ -1008,7 +1024,7 @@ impl Account {
         bs1: &Option<BalanceSheet>,
         plx: &Option<ProfitLoss>,
         cf: &Option<CashFlow>,
-        ft: &FinOthers,
+        ft: &Option<FinOthers>,
     ) -> Option<Self> {
         if let Some(pl) = plx {
             let bs_dt = |dt, bs: &Option<BalanceSheet>| match bs {
@@ -1017,7 +1033,12 @@ impl Account {
             };
 
             let cf_dt = |dt0, dt1, cf: &Option<CashFlow>| match cf {
-                Some(cfp) => (cfp.date_beg, cfp.date_end, Some(cfp.items.clone())),
+                Some(cp) => (cp.date_beg, cp.date_end, Some(cp.items.clone())),
+                _ => (dt0, dt1, None),
+            };
+
+            let fo_dt = |dt0, dt1, fth: &Option<FinOthers>| match fth {
+                Some(fo) => (fo.date_beg, fo.date_end, Some(fo.items.clone())),
                 _ => (dt0, dt1, None),
             };
 
@@ -1025,7 +1046,7 @@ impl Account {
             let (dbt0, balance_sheet_beg) = bs_dt(date_beg, bs0);
             let (dbt1, balance_sheet_end) = bs_dt(date_end, bs1);
             let (dct0, dct1, cash_flow) = cf_dt(date_beg, date_end, cf);
-            let (dft0, dft1, others) = (ft.date_beg, ft.date_end, ft.items.clone());
+            let (dft0, dft1, others) = fo_dt(date_beg, date_end, ft);
             if date_beg == dbt0
                 && date_beg == dct0
                 && date_beg == dft0
@@ -1085,12 +1106,12 @@ impl Account {
         })
     }
 
-    pub fn fin_others(&self) -> FinOthers {
-        FinOthers {
+    pub fn fin_others(&self) -> Option<FinOthers> {
+        Some(FinOthers {
             date_beg: self.date_beg,
             date_end: self.date_end,
-            items: (self.others).clone(),
-        }
+            items: (&self.others).clone()?,
+        })
     }
 
     pub fn eps() -> f64 {
@@ -1113,29 +1134,47 @@ impl Account {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Company {
     pub code: String,
-    pub affiliation: HashMap<String, f64>,
+    pub link: String,
+    pub affiliation: HashMap<Industry, f64>,
     pub consolidated: bool,
-    pub period: Vec<NDt>,
-    pub balance_sheet: HashMap<NDt, Option<BsMap>>,
-    pub profit_loss: HashMap<(NDt, NDt), Option<PlMap>>,
-    pub cash_flow: HashMap<(NDt, NDt), Option<CfMap>>,
+    pub dates: BTreeSet<NDt>,
+    pub balance_sheet: HashMap<NDt, BsMap>,
+    pub profit_loss: HashMap<(NDt, NDt), PlMap>,
+    pub cash_flow: HashMap<(NDt, NDt), CfMap>,
     pub others: HashMap<(NDt, NDt), FinOthersMap>,
-    pub share_price: Option<Vec<(NDt, f64)>>,
-    pub rate: Option<Vec<Param>>,
-    pub beta: Option<Vec<Param>>,
+    pub share_price: BTreeMap<NDt, f64>,
+    pub rate: BTreeMap<NDt, Param>,
+    pub beta: BTreeMap<NDt, Param>,
 }
 
 impl Company {
+    pub fn valid_date(&self, dt: NDt) -> bool {
+        self.dates.contains(&dt)
+    }
+
+    pub fn date_iter(&self) -> IntoIter<NDt> {
+        self.dates.clone().into_iter()
+    }
+
+    pub fn date_vec(&self) -> Vec<NDt> {
+        self.date_iter().collect()
+    }
+
+    pub fn set_dates_from_profit_loss(&mut self) -> &mut Self {
+        // TODO: Implement set_dates
+        todo!()
+    }
+
     pub fn get_account(&self, d0: NDt, d1: NDt) -> Option<Account> {
-        if self.period.contains(&d0) && self.period.contains(&d1) {
+        if let Some(pl) = self.profit_loss.get(&(d0, d1)) {
             Some(Account {
                 date_beg: d0,
                 date_end: d1,
-                balance_sheet_beg: self.balance_sheet[&d0].clone(),
-                balance_sheet_end: self.balance_sheet[&d1].clone(),
-                profit_loss: self.profit_loss[&(d0, d1)].clone(),
-                cash_flow: self.cash_flow[&(d0, d1)].clone(),
-                others: self.others[&(d0, d1)].clone(),
+                balance_sheet_beg: Some(self.balance_sheet.get(&d0)?.clone()),
+                balance_sheet_end: Some(self.balance_sheet.get(&d1)?.clone()),
+                profit_loss: Some(pl.clone()),
+                cash_flow: Some(self.cash_flow.get(&(d0, d1))?.clone()),
+                others: Some(self.others.get(&(d0, d1))?.clone()),
             })
         } else {
             None
@@ -1148,11 +1187,6 @@ impl Company {
     }
 
     pub fn transact(&mut self, _date: NDt, _deb: BsType, _crd: BsType, _x: f64) -> &mut Self {
-        // TODO: Add implementation
-        todo!()
-    }
-
-    pub fn sort_dates(&mut self) -> &mut Self {
         // TODO: Add implementation
         todo!()
     }
@@ -1216,7 +1250,7 @@ mod accounts {
             ])),
             cash_flow: None,
 
-            others: HashMap::new(),
+            others: Some(HashMap::new()),
         };
 
         let ac_js = serde_json::to_string(&ac1).unwrap();
@@ -1285,5 +1319,10 @@ mod accounts {
         assert!(approx(cf.items.value(CashFlowInvestments), 0.0));
 
         // println!("{:?}", cf);
+
+        let tx: Company =
+            ron::from_str(&std::fs::read_to_string("./tatamotors.ron").unwrap()).unwrap();
+
+        println!("{:?}", tx);
     }
 }

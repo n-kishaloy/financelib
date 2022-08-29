@@ -1,0 +1,100 @@
+Company (
+    
+    code: "Tata",
+    link: "a.b.com",
+
+    affiliation: {
+        Automotive: 0.75,
+        Aerospace: 0.25,
+    },
+
+    consolidated: true,
+
+    dates: [],
+
+    balance_sheet: { 
+        "2009-03-01": {
+            Cash: 41210,
+            CurrentReceivables: 47950,
+            CurrentAdvances: 150610,
+            OtherCurrentAssets: -15190,
+            WorkInProgress: 105330,
+            FinishedGoods: 109510,
+            LongTermInvestments: 12570,
+            PlantPropertyEquipment: 621880,
+            AccumulatedDepreciation: 332690,
+            NetPlantPropertyEquipment: 289190,
+            Assets: 741180,
+            CurrentPayables: 188600,
+            OtherCurrentLiabilities: 143440,
+            CurrentLiabilities: 332040,
+            LongTermBorrowings: 349740,
+            CommonStock: 5140,
+            Reserves: 54270,
+        },
+
+        "2010-03-01": {
+            Cash: 87430,
+            CurrentReceivables: 71910,
+            CurrentAdvances: 175990,
+            OtherCurrentAssets: -24000,
+            WorkInProgress: 89160,
+            FinishedGoods: 113120,
+            LongTermInvestments: 22190,
+            PlantPropertyEquipment: 672460,
+            AccumulatedDepreciation: 342320,
+            NetPlantPropertyEquipment: 330140,
+            Assets: 865940,
+            CurrentPayables: 239640,
+            OtherCurrentLiabilities: 193150,
+            CurrentLiabilities: 432790,
+            LongTermBorrowings: 351080,
+            CommonStock: 5710,
+            Reserves: 76360
+        },
+
+
+    },
+    profit_loss: { 
+
+        ("2008-03-01", "2009-03-01"): {
+            OperatingRevenue: 708810,
+            OtherIncome: 10390,
+            CostMaterial: 471723,
+            DirectExpenses: 27748,
+            Salaries: 69371,
+            OtherExpenses: 124868,
+            Depreciation: 25070,
+            InterestExpense: 21710,
+            Pbt: -21290,
+            TaxesCurrent: 3760,
+            Pat: -25050
+        },
+
+        ("2009-03-01", "2010-03-01"): {
+            OperatingRevenue: 925190,
+            OtherIncome: 21030,
+            CostMaterial: 559330,
+            DirectExpenses: 33899,
+            Salaries: 84747,
+            OtherExpenses: 169494,
+            Depreciation: 38870,
+            InterestExpense: 24650,
+            Pbt: 35230,
+            TaxesCurrent: 9520,
+            Pat: 25710
+        },
+
+
+
+
+    },
+    cash_flow: { },
+    others: { },
+    share_price: { },
+    rate: {},
+    beta: {},
+)
+
+
+
