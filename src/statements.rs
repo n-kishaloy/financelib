@@ -691,7 +691,7 @@ pub trait FinMaps {
     fn calc_elements(&mut self) -> &mut Self;
 
     /** remove_calc_elem - which removes all calculated elements from a HashMap */
-    fn remove_calc_elem(&mut self) -> &mut Self;
+    fn remove_calc_clean(&mut self) -> &mut Self;
 
     /** check - which checks if the particular Hashmap with the items are correct */
     fn check(&self) -> bool;
@@ -748,8 +748,8 @@ impl FinMaps for BsMap {
         self
     }
 
-    fn remove_calc_elem(&mut self) -> &mut Self {
-        self.retain(|k, _| !k.is_calc());
+    fn remove_calc_clean(&mut self) -> &mut Self {
+        self.retain(|k, v| !k.is_calc() || v.abs() > 1e-5);
         self
     }
 
@@ -830,8 +830,8 @@ impl FinMaps for PlMap {
         self
     }
 
-    fn remove_calc_elem(&mut self) -> &mut Self {
-        self.retain(|k, _| !k.is_calc());
+    fn remove_calc_clean(&mut self) -> &mut Self {
+        self.retain(|k, v| !k.is_calc() || v.abs() > 1e-5);
         self
     }
 
@@ -903,8 +903,8 @@ impl FinMaps for CfMap {
         self
     }
 
-    fn remove_calc_elem(&mut self) -> &mut Self {
-        self.retain(|k, _| !k.is_calc());
+    fn remove_calc_clean(&mut self) -> &mut Self {
+        self.retain(|k, v| !k.is_calc() || v.abs() > 1e-5);
         self
     }
 
