@@ -743,13 +743,16 @@ impl FinMaps for BsMap {
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in BALANCE_SHEET_MAP.iter() {
-            self.insert(*k, calc_elem(self, d, b));
+            let p = calc_elem(self, d, b);
+            if p.abs() > 1e-5 {
+                self.insert(*k, p);
+            }
         }
         self
     }
 
     fn remove_calc_clean(&mut self) -> &mut Self {
-        self.retain(|k, v| !k.is_calc() || v.abs() > 1e-5);
+        self.retain(|k, v| !k.is_calc() && v.abs() > 1e-5);
         self
     }
 
@@ -825,13 +828,16 @@ impl FinMaps for PlMap {
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in PROFIT_LOSS_MAP.iter() {
-            self.insert(*k, calc_elem(self, d, b));
+            let p = calc_elem(self, d, b);
+            if p.abs() > 1e-5 {
+                self.insert(*k, p);
+            }
         }
         self
     }
 
     fn remove_calc_clean(&mut self) -> &mut Self {
-        self.retain(|k, v| !k.is_calc() || v.abs() > 1e-5);
+        self.retain(|k, v| !k.is_calc() && v.abs() > 1e-5);
         self
     }
 
@@ -898,13 +904,16 @@ impl FinMaps for CfMap {
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in CASH_FLOW_MAP.iter() {
-            self.insert(*k, calc_elem(self, d, b));
+            let p = calc_elem(self, d, b);
+            if p.abs() > 1e-5 {
+                self.insert(*k, p);
+            }
         }
         self
     }
 
     fn remove_calc_clean(&mut self) -> &mut Self {
-        self.retain(|k, v| !k.is_calc() || v.abs() > 1e-5);
+        self.retain(|k, v| !k.is_calc() && v.abs() > 1e-5);
         self
     }
 
@@ -1165,25 +1174,56 @@ impl Company {
         todo!()
     }
 
+    pub fn remove_calc_clean(&mut self) -> &mut Self {
+        for v in self.balance_sheet.values_mut() {
+            v.remove_calc_clean();
+        }
+        for v in self.profit_loss.values_mut() {
+            v.remove_calc_clean();
+        }
+        for v in self.cash_flow.values_mut() {
+            v.remove_calc_clean();
+        }
+        self
+    }
+
+    pub fn calc_elements(&mut self) -> &mut Self {
+        for v in self.balance_sheet.values_mut() {
+            v.calc_elements();
+        }
+        for v in self.profit_loss.values_mut() {
+            v.calc_elements();
+        }
+        for v in self.cash_flow.values_mut() {
+            v.remove_calc_clean();
+        }
+        self
+    }
+
     pub fn get_account(&self, d0: NDt, d1: NDt) -> Option<Account> {
         if let Some(pl) = self.profit_loss.get(&(d0, d1)) {
+            fn get_hashmap<K: Hash + Eq, T: Hash + Clone>(
+                k: K,
+                h: &HashMap<K, HashMap<T, f64>>,
+            ) -> Option<HashMap<T, f64>> {
+                if let Some(x) = h.get(&k) {
+                    Some((*x).clone())
+                } else {
+                    None
+                }
+            }
             Some(Account {
                 date_beg: d0,
                 date_end: d1,
-                balance_sheet_beg: Some(self.balance_sheet.get(&d0)?.clone()),
-                balance_sheet_end: Some(self.balance_sheet.get(&d1)?.clone()),
+                balance_sheet_beg: get_hashmap(d0, &self.balance_sheet),
+                balance_sheet_end: get_hashmap(d1, &self.balance_sheet),
                 profit_loss: Some(pl.clone()),
-                cash_flow: Some(self.cash_flow.get(&(d0, d1))?.clone()),
-                others: Some(self.others.get(&(d0, d1))?.clone()),
+                cash_flow: get_hashmap((d0, d1), &self.cash_flow),
+                others: get_hashmap((d0, d1), &self.others),
             })
         } else {
             None
         }
-    }
-
-    pub fn calc_elements(&mut self) -> &mut Self {
-        // TODO: Add implementation
-        todo!()
     }
 
     pub fn transact(&mut self, _date: NDt, _deb: BsType, _crd: BsType, _x: f64) -> &mut Self {
@@ -1320,9 +1360,20 @@ mod accounts {
 
         // println!("{:?}", cf);
 
-        let tx: Company =
+        let mut tx: Company =
             ron::from_str(&std::fs::read_to_string("./tatamotors.ron").unwrap()).unwrap();
 
-        println!("{:?}", tx);
+        tx.remove_calc_clean();
+        println!("{:?}\n\n\n", tx);
+        println!(
+            "{:?}\n\n\n",
+            tx.get_account(NDt::from_ymd(2018, 6, 1), NDt::from_ymd(2018, 9, 1))
+        );
+
+        tx.calc_elements();
+        println!(
+            "{:?}\n\n\n",
+            tx.get_account(NDt::from_ymd(2018, 3, 1), NDt::from_ymd(2019, 3, 1))
+        );
     }
 }
