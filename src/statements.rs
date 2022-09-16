@@ -13,7 +13,7 @@ Income Statements and Cash Flow Statements and their utiities.
 You may see the github repository at <https://github.com/n-kishaloy/financelib>
 */
 
-use chrono::naive::NaiveDate as NDt;
+use chrono::{naive::NaiveDate as NDt, Duration};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
@@ -888,13 +888,19 @@ Note that you have to still run the calc_elements function to compute the full
 Cash Flow statement. This function just provides an easy way to derive them of
 a Balance Sheet.
  */
-pub fn derive_cash_flow(bs_beg: &BsMap, bs_end: &BsMap, pl: &PlMap) -> CfMap {
+pub fn derive_cash_flow(b0: &BsMap, b1: &BsMap, pl: &PlMap) -> CfMap {
     let mut cf = CfMap::new();
     for (k, (d, b)) in CASH_FLOW_PROFIT_LOSS.iter() {
-        cf.insert(*k, calc_elem(pl, d, b));
+        let elem = calc_elem(pl, d, b);
+        if elem.abs() > 1e-5 {
+            cf.insert(*k, elem);
+        }
     }
     for (k, (d, b)) in CASH_FLOW_BALANCE_SHEET.iter() {
-        cf.insert(*k, calc_elem(bs_end, d, b) - calc_elem(bs_beg, d, b));
+        let elem = calc_elem(b1, d, b) - calc_elem(b0, d, b);
+        if elem.abs() > 1e-5 {
+            cf.insert(*k, elem);
+        }
     }
     cf
 }
@@ -1081,8 +1087,29 @@ impl Account {
     }
 
     pub fn calc_elements(&mut self) -> &mut Self {
-        // TODO: Add implementation
-        todo!()
+        fn get_hm<T: FinMaps + Clone>(h: &Option<T>) -> Option<T> {
+            match h.clone() {
+                None => None,
+                Some(mut x) => Some(x.calc_elements().clone()),
+            }
+        }
+
+        let pl = get_hm(&self.profit_loss).unwrap();
+        let b_beg = get_hm(&self.balance_sheet_beg);
+        let b_end = get_hm(&self.balance_sheet_end);
+        let cf = match (&b_beg, &b_end) {
+            (Some(bs_b), Some(bs_e)) => {
+                Some(derive_cash_flow(&bs_b, &bs_e, &pl).calc_elements().clone())
+            }
+            (_, _) => None,
+        };
+
+        self.balance_sheet_beg = b_beg;
+        self.balance_sheet_end = b_end;
+        self.profit_loss = Some(pl);
+        self.cash_flow = cf;
+
+        self
     }
 
     pub fn balance_sheet_beg(&self) -> Option<BalanceSheet> {
@@ -1170,8 +1197,38 @@ impl Company {
     }
 
     pub fn set_dates_from_profit_loss(&mut self) -> &mut Self {
-        // TODO: Implement set_dates
-        todo!()
+        for (d0, d1) in self.profit_loss.keys() {
+            if d0 > d1 {
+                panic!("Dates are not in order ({},{})", d0, d1)
+            } else {
+                self.dates.insert(*d0);
+                self.dates.insert(*d1);
+            }
+        }
+        self
+    }
+
+    pub fn split_periods(&self) -> (BTreeSet<(NDt, NDt)>, BTreeSet<(NDt, NDt)>) {
+        let dts = self.profit_loss.keys().into_iter();
+        (
+            dts.clone()
+                .filter_map(|&(d0, d1)| {
+                    if d0 + Duration::days(120) < d1 {
+                        Some((d0, d1))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            dts.filter_map(|&(d0, d1)| {
+                if d0 + Duration::days(120) > d1 {
+                    Some((d0, d1))
+                } else {
+                    None
+                }
+            })
+            .collect(),
+        )
     }
 
     pub fn remove_calc_clean(&mut self) -> &mut Self {
@@ -1195,7 +1252,7 @@ impl Company {
             v.calc_elements();
         }
         for v in self.cash_flow.values_mut() {
-            v.remove_calc_clean();
+            v.calc_elements();
         }
         self
     }
@@ -1206,12 +1263,9 @@ impl Company {
                 k: K,
                 h: &HashMap<K, HashMap<T, f64>>,
             ) -> Option<HashMap<T, f64>> {
-                if let Some(x) = h.get(&k) {
-                    Some((*x).clone())
-                } else {
-                    None
-                }
+                Some(h.get(&k)?.clone())
             }
+
             Some(Account {
                 date_beg: d0,
                 date_end: d1,
@@ -1226,14 +1280,29 @@ impl Company {
         }
     }
 
-    pub fn transact(&mut self, _date: NDt, _deb: BsType, _crd: BsType, _x: f64) -> &mut Self {
-        // TODO: Add implementation
-        todo!()
+    pub fn calc_cash_flow(&mut self) -> &mut Self {
+        for &(d0, d1) in self.profit_loss.keys() {
+            match (self.balance_sheet.get(&d0), self.balance_sheet.get(&d1)) {
+                (Some(b0), Some(b1)) => {
+                    self.cash_flow.insert(
+                        (d0, d1),
+                        derive_cash_flow(b0, b1, self.profit_loss.get(&(d0, d1)).unwrap())
+                            .calc_elements()
+                            .clone(),
+                    );
+                }
+                _ => (),
+            }
+        }
+
+        self
     }
 
     pub fn to_account_vec(&self) -> Vec<Account> {
-        // TODO: Add implementation
-        todo!()
+        self.profit_loss
+            .keys()
+            .map(|&(d0, d1)| self.get_account(d0, d1).unwrap())
+            .collect()
     }
 
     pub fn from_account_vec(&mut self, _ac_vec: &Vec<Account>) -> &mut Self {
@@ -1363,7 +1432,8 @@ mod accounts {
         let mut tx: Company =
             ron::from_str(&std::fs::read_to_string("./tatamotors.ron").unwrap()).unwrap();
 
-        tx.remove_calc_clean();
+        tx.set_dates_from_profit_loss().remove_calc_clean();
+
         println!("{:?}\n\n\n", tx);
         println!(
             "{:?}\n\n\n",
@@ -1374,6 +1444,15 @@ mod accounts {
         println!(
             "{:?}\n\n\n",
             tx.get_account(NDt::from_ymd(2018, 3, 1), NDt::from_ymd(2019, 3, 1))
+        );
+
+        println!("{:?}\n\n\n", tx.split_periods());
+
+        tx.calc_cash_flow();
+
+        println!(
+            "{:?}\n\n\n",
+            tx.get_account(NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1))
         );
     }
 }
