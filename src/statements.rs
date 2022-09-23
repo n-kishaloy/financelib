@@ -13,7 +13,7 @@ Income Statements and Cash Flow Statements and their utiities.
 You may see the github repository at <https://github.com/n-kishaloy/financelib>
 */
 
-use chrono::{naive::NaiveDate as NDt, Duration};
+use chrono::{naive::NaiveDate as NDt, Datelike, Duration};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
@@ -57,7 +57,7 @@ pub enum BsType {
     AccumulatedDepreciation,
     NetPlantPropertyEquipment,
     LeasingRentalAssets,
-    AccumulatedAmortizationLeaseRental,
+    AccumulatedAmortizationLease,
     NetLeaseRentalAssets,
     Goodwill,
     CapitalWip,
@@ -225,7 +225,7 @@ pub enum Industry {
     Education,
 }
 
-use core::panic;
+use core::{fmt, panic};
 use std::{
     collections::{btree_set::IntoIter, BTreeMap, BTreeSet, HashMap, HashSet},
     hash::Hash,
@@ -265,7 +265,7 @@ lazy_static! {
             NetLeaseRentalAssets,
             (
                 vec![LeasingRentalAssets],
-                vec![AccumulatedAmortizationLeaseRental],
+                vec![AccumulatedAmortizationLease],
             )
         ),
         (
@@ -493,7 +493,7 @@ lazy_static! {
             (
                 vec![
                     AccumulatedDepreciation,
-                    AccumulatedAmortizationLeaseRental,
+                    AccumulatedAmortizationLease,
                     AccumulatedAmortization,
                 ],
                 vec![AccountReceivables, LongTermAdvances, CapitalWip,]
@@ -888,7 +888,7 @@ Note that you have to still run the calc_elements function to compute the full
 Cash Flow statement. This function just provides an easy way to derive them of
 a Balance Sheet.
  */
-pub fn derive_cash_flow(b0: &BsMap, b1: &BsMap, pl: &PlMap) -> CfMap {
+pub fn calc_cash_flow(b0: &BsMap, b1: &BsMap, pl: &PlMap) -> CfMap {
     let mut cf = CfMap::new();
     for (k, (d, b)) in CASH_FLOW_PROFIT_LOSS.iter() {
         let elem = calc_elem(pl, d, b);
@@ -1099,7 +1099,7 @@ impl Account {
         let b_end = get_hm(&self.balance_sheet_end);
         let cf = match (&b_beg, &b_end) {
             (Some(bs_b), Some(bs_e)) => {
-                Some(derive_cash_flow(&bs_b, &bs_e, &pl).calc_elements().clone())
+                Some(calc_cash_flow(&bs_b, &bs_e, &pl).calc_elements().clone())
             }
             (_, _) => None,
         };
@@ -1172,12 +1172,13 @@ pub struct Company {
     pub code: String,
     pub link: String,
     pub affiliation: HashMap<Industry, f64>,
+    pub currency: String,
     pub consolidated: bool,
     pub dates: BTreeSet<NDt>,
-    pub balance_sheet: HashMap<NDt, BsMap>,
-    pub profit_loss: HashMap<(NDt, NDt), PlMap>,
-    pub cash_flow: HashMap<(NDt, NDt), CfMap>,
-    pub others: HashMap<(NDt, NDt), FinOthersMap>,
+    pub balance_sheet: BTreeMap<NDt, BsMap>,
+    pub profit_loss: BTreeMap<(NDt, NDt), PlMap>,
+    pub cash_flow: BTreeMap<(NDt, NDt), CfMap>,
+    pub others: BTreeMap<(NDt, NDt), FinOthersMap>,
     pub share_price: BTreeMap<NDt, f64>,
     pub rate: BTreeMap<NDt, Param>,
     pub beta: BTreeMap<NDt, Param>,
@@ -1259,9 +1260,9 @@ impl Company {
 
     pub fn get_account(&self, d0: NDt, d1: NDt) -> Option<Account> {
         if let Some(pl) = self.profit_loss.get(&(d0, d1)) {
-            fn get_hashmap<K: Hash + Eq, T: Hash + Clone>(
+            fn get_hashmap<K: Hash + Eq + Ord, T: Hash + Clone>(
                 k: K,
-                h: &HashMap<K, HashMap<T, f64>>,
+                h: &BTreeMap<K, HashMap<T, f64>>,
             ) -> Option<HashMap<T, f64>> {
                 Some(h.get(&k)?.clone())
             }
@@ -1286,7 +1287,7 @@ impl Company {
                 (Some(b0), Some(b1)) => {
                     self.cash_flow.insert(
                         (d0, d1),
-                        derive_cash_flow(b0, b1, self.profit_loss.get(&(d0, d1)).unwrap())
+                        calc_cash_flow(b0, b1, self.profit_loss.get(&(d0, d1)).unwrap())
                             .calc_elements()
                             .clone(),
                     );
@@ -1294,7 +1295,6 @@ impl Company {
                 _ => (),
             }
         }
-
         self
     }
 
@@ -1308,6 +1308,165 @@ impl Company {
     pub fn from_account_vec(&mut self, _ac_vec: &Vec<Account>) -> &mut Self {
         // TODO: Add implementation
         todo!()
+    }
+}
+
+impl fmt::Display for Company {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut x = format!("Code: {}\n", self.code);
+        x = x + &format!("Link: {}\n", self.link);
+
+        fn print_statements<
+            K: Hash + Eq + Ord + Copy,
+            T: FinType + Hash + Copy + Eq + std::fmt::Debug,
+        >(
+            s: T,
+            d: &Vec<T>,
+            c: &Vec<T>,
+            h: &BTreeMap<K, HashMap<T, f64>>,
+            lt: &BTreeSet<K>,
+            mut x: String,
+            mult: f64,
+        ) -> String {
+            fn item_exist<K: Hash + Eq + Copy, T: FinType + Hash + Copy + Eq>(
+                k: T,
+                h: &BTreeMap<K, HashMap<T, f64>>,
+            ) -> bool {
+                h.iter()
+                    .map(|(_, b)| b.get(&k).unwrap_or(&0.0).abs())
+                    .sum::<f64>()
+                    > 0.0
+            }
+
+            fn print_items<
+                K: Hash + Eq + Ord + Copy,
+                T: FinType + Hash + Copy + Eq + std::fmt::Debug,
+            >(
+                k: T,
+                h: &BTreeMap<K, HashMap<T, f64>>,
+                lt: &BTreeSet<K>,
+                mut x: String,
+                mult: f64,
+            ) -> String {
+                if item_exist(k, h) {
+                    let kx = format!("{:?}", k);
+                    x = x + &format!("|{:<30}|", kx);
+                    for &z in lt.iter() {
+                        x = x + &(if let Some(w) = h.get(&z) {
+                            format!("{:7.0}|", w.get(&k).unwrap_or(&0.0) / mult)
+                        } else {
+                            String::from("       |")
+                        });
+                    }
+                    x = x + &format!("\n");
+                }
+                x
+            }
+
+            for &k in d.iter() {
+                x = print_items(k, h, lt, x, mult);
+            }
+            for &k in c.iter() {
+                x = print_items(k, h, lt, x, mult);
+            }
+            x = print_items(s, h, lt, x, mult);
+            if item_exist(s, h) {
+                x = x + &format!("\n");
+            }
+            x
+        }
+
+        let mult = 1000f64.powi(
+            ((std::cmp::max(
+                self.balance_sheet
+                    .iter()
+                    .map(|(_, x)| x.value(Assets).floor() as i64)
+                    .max()
+                    .unwrap(),
+                self.profit_loss
+                    .iter()
+                    .map(|(_, x)| x.value(Revenue).floor() as i64)
+                    .max()
+                    .unwrap(),
+            ) as f64)
+                .log10()
+                .ceil() as i32)
+                / 3
+                - 1,
+        );
+
+        x = x + &format!("\nAll values in multiples of {} {mult}\n\n", self.currency);
+
+        let bs_ky = self.balance_sheet.iter().map(|(&d0, _)| d0).collect();
+
+        x = x + &format!("BALANCE SHEETS\n\n|{:<30}|", "Date");
+        for (d0, _) in self.balance_sheet.iter() {
+            x = x + &format!("{}-{:02}|", d0.year(), d0.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in BALANCE_SHEET_MAP.iter() {
+            x = print_statements(*s, d, c, &self.balance_sheet, &bs_ky, x, mult);
+        }
+
+        let (pl_ann, pl_qtr) = self.split_periods();
+        let d0 = pl_ann.iter().map(|(x0, _)| x0);
+        let d1 = pl_ann.iter().map(|(_, x1)| x1);
+        let q0 = pl_qtr.iter().map(|(x0, _)| x0);
+        let q1 = pl_qtr.iter().map(|(_, x1)| x1);
+
+        x = x + &format!("\n\nPROFIT LOSS - ANNUAL\n\n|{:<30}|", "Begin Date");
+        for v in d0.clone() {
+            x = x + &format!("{}-{:02}|", v.year(), v.month());
+        }
+        x = x + &format!("\n|{:<30}|", "End Date");
+        for v in d1.clone() {
+            x = x + &format!("{}-{:02}|", v.year(), v.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
+            x = print_statements(*s, d, c, &self.profit_loss, &pl_ann, x, mult);
+        }
+
+        x = x + &format!("\n\nCASH FLOW - ANNUAL\n\n|{:<30}|", "Begin Date");
+        for v in d0 {
+            x = x + &format!("{}-{:02}|", v.year(), v.month());
+        }
+        x = x + &format!("\n|{:<30}|", "End Date");
+        for v in d1 {
+            x = x + &format!("{}-{:02}|", v.year(), v.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in CASH_FLOW_MAP.iter() {
+            x = print_statements(*s, d, c, &self.cash_flow, &pl_ann, x, mult);
+        }
+
+        x = x + &format!("\n\nPROFIT LOSS - QUARTERLY\n\n|{:<30}|", "Begin Date");
+        for v in q0.clone() {
+            x = x + &format!("{}-{:02}|", v.year(), v.month());
+        }
+        x = x + &format!("\n|{:<30}|", "End Date");
+        for v in q1.clone() {
+            x = x + &format!("{}-{:02}|", v.year(), v.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
+            x = print_statements(*s, d, c, &self.profit_loss, &pl_qtr, x, mult);
+        }
+
+        x = x + &format!("\n\nCASH FLOW - QUARTERLY\n\n|{:<30}|", "Begin Date");
+        for v in q0 {
+            x = x + &format!("{}-{:02}|", v.year(), v.month());
+        }
+        x = x + &format!("\n|{:<30}|", "End Date");
+        for v in q1 {
+            x = x + &format!("{}-{:02}|", v.year(), v.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in CASH_FLOW_MAP.iter() {
+            x = print_statements(*s, d, c, &self.cash_flow, &pl_qtr, x, mult);
+        }
+
+        write!(f, "{}", x)
     }
 }
 
@@ -1334,7 +1493,7 @@ mod accounts {
         assert_eq!(DEBIT_TYPE.get(&NetPlantPropertyEquipment), None);
         assert_eq!(DEBIT_TYPE.get(&AccumulatedDepreciation), Some(&AssetContra));
         assert_eq!(
-            DEBIT_TYPE.get(&AccumulatedAmortizationLeaseRental),
+            DEBIT_TYPE.get(&AccumulatedAmortizationLease),
             Some(&AssetContra)
         );
         assert_eq!(DEBIT_TYPE.get(&LongTermLiabilities), None);
@@ -1454,5 +1613,7 @@ mod accounts {
             "{:?}\n\n\n",
             tx.get_account(NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1))
         );
+
+        println!("{}", tx);
     }
 }
