@@ -475,7 +475,6 @@ lazy_static! {
         (
             ChangeCurrentAssets,
             (
-                vec![],
                 vec![
                     CurrentReceivables,
                     CurrentLoans,
@@ -485,18 +484,19 @@ lazy_static! {
                     RawMaterials,
                     WorkInProgress,
                     FinishedGoods,
-                ]
+                ],
+                vec![],
             )
         ),
         (
             ChangeLongTermAssets,
             (
+                vec![AccountReceivables, LongTermAdvances, CapitalWip,],
                 vec![
                     AccumulatedDepreciation,
                     AccumulatedAmortizationLease,
                     AccumulatedAmortization,
                 ],
-                vec![AccountReceivables, LongTermAdvances, CapitalWip,]
             )
         ),
         (
@@ -542,19 +542,19 @@ lazy_static! {
         (
             ChangePPE,
             (
+                vec![PlantPropertyEquipment, LeasingRentalAssets,],
                 vec![RevaluationReserves, Reserves,],
-                vec![PlantPropertyEquipment, LeasingRentalAssets,]
             )
         ),
         (
             InvestmentsCapDevp,
-            (vec![], vec![IntangibleAssetsDevelopment,])
+            (vec![IntangibleAssetsDevelopment], vec![],)
         ),
-        (InvestmentsLoans, (vec![], vec![LongTermLoanAssets,])),
-        (ChangeEquityAssets, (vec![], vec![IntangibleAssets,])),
+        (InvestmentsLoans, (vec![LongTermLoanAssets,], vec![],)),
+        (ChangeEquityAssets, (vec![IntangibleAssets,], vec![],)),
         (
             ChangeInvestments,
-            (vec![], vec![LongTermInvestments, Goodwill,])
+            (vec![LongTermInvestments, Goodwill,], vec![],)
         ),
         (
             OtherCashFlowInvestments,
@@ -1353,9 +1353,9 @@ impl fmt::Display for Company {
                     x = x + &format!("|{:<30}|", kx);
                     for &z in lt.iter() {
                         x = x + &(if let Some(w) = h.get(&z) {
-                            format!("{:7.0}|", w.get(&k).unwrap_or(&0.0) / mult)
+                            format!("{:>9.0}|", w.get(&k).unwrap_or(&0.0) / mult)
                         } else {
-                            String::from("       |")
+                            String::from("         |")
                         });
                     }
                     x = x + &format!("\n");
@@ -1392,7 +1392,7 @@ impl fmt::Display for Company {
                 .log10()
                 .ceil() as i32)
                 / 3
-                - 1,
+                - 2,
         );
 
         x = x + &format!("\nAll values in multiples of {} {mult}\n\n", self.currency);
@@ -1401,7 +1401,7 @@ impl fmt::Display for Company {
 
         x = x + &format!("BALANCE SHEETS\n\n|{:<30}|", "Date");
         for (d0, _) in self.balance_sheet.iter() {
-            x = x + &format!("{}-{:02}|", d0.year(), d0.month());
+            x = x + &format!("  {}-{:02}|", d0.year(), d0.month());
         }
         x = x + &format!("\n\n");
         for (s, (d, c)) in BALANCE_SHEET_MAP.iter() {
@@ -1416,11 +1416,11 @@ impl fmt::Display for Company {
 
         x = x + &format!("\n\nPROFIT LOSS - ANNUAL\n\n|{:<30}|", "Begin Date");
         for v in d0.clone() {
-            x = x + &format!("{}-{:02}|", v.year(), v.month());
+            x = x + &format!("  {}-{:02}|", v.year(), v.month());
         }
         x = x + &format!("\n|{:<30}|", "End Date");
         for v in d1.clone() {
-            x = x + &format!("{}-{:02}|", v.year(), v.month());
+            x = x + &format!("  {}-{:02}|", v.year(), v.month());
         }
         x = x + &format!("\n\n");
         for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
@@ -1429,11 +1429,11 @@ impl fmt::Display for Company {
 
         x = x + &format!("\n\nCASH FLOW - ANNUAL\n\n|{:<30}|", "Begin Date");
         for v in d0 {
-            x = x + &format!("{}-{:02}|", v.year(), v.month());
+            x = x + &format!("  {}-{:02}|", v.year(), v.month());
         }
         x = x + &format!("\n|{:<30}|", "End Date");
         for v in d1 {
-            x = x + &format!("{}-{:02}|", v.year(), v.month());
+            x = x + &format!("  {}-{:02}|", v.year(), v.month());
         }
         x = x + &format!("\n\n");
         for (s, (d, c)) in CASH_FLOW_MAP.iter() {
@@ -1442,11 +1442,11 @@ impl fmt::Display for Company {
 
         x = x + &format!("\n\nPROFIT LOSS - QUARTERLY\n\n|{:<30}|", "Begin Date");
         for v in q0.clone() {
-            x = x + &format!("{}-{:02}|", v.year(), v.month());
+            x = x + &format!("  {}-{:02}|", v.year(), v.month());
         }
         x = x + &format!("\n|{:<30}|", "End Date");
         for v in q1.clone() {
-            x = x + &format!("{}-{:02}|", v.year(), v.month());
+            x = x + &format!("  {}-{:02}|", v.year(), v.month());
         }
         x = x + &format!("\n\n");
         for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
@@ -1455,11 +1455,11 @@ impl fmt::Display for Company {
 
         x = x + &format!("\n\nCASH FLOW - QUARTERLY\n\n|{:<30}|", "Begin Date");
         for v in q0 {
-            x = x + &format!("{}-{:02}|", v.year(), v.month());
+            x = x + &format!("  {}-{:02}|", v.year(), v.month());
         }
         x = x + &format!("\n|{:<30}|", "End Date");
         for v in q1 {
-            x = x + &format!("{}-{:02}|", v.year(), v.month());
+            x = x + &format!("  {}-{:02}|", v.year(), v.month());
         }
         x = x + &format!("\n\n");
         for (s, (d, c)) in CASH_FLOW_MAP.iter() {
