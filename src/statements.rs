@@ -1309,10 +1309,8 @@ impl Company {
         // TODO: Add implementation
         todo!()
     }
-}
 
-impl fmt::Display for Company {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    pub fn format_table(&self, separator: &str, mult: f64) -> String {
         let mut x = format!("Code: {}\n", self.code);
         x = x + &format!("Link: {}\n", self.link);
 
@@ -1327,6 +1325,7 @@ impl fmt::Display for Company {
             lt: &BTreeSet<K>,
             mut x: String,
             mult: f64,
+            separator: &str,
         ) -> String {
             fn item_exist<K: Hash + Eq + Copy, T: FinType + Hash + Copy + Eq>(
                 k: T,
@@ -1347,15 +1346,16 @@ impl fmt::Display for Company {
                 lt: &BTreeSet<K>,
                 mut x: String,
                 mult: f64,
+                separator: &str,
             ) -> String {
                 if item_exist(k, h) {
                     let kx = format!("{:?}", k);
-                    x = x + &format!("|{:<30}|", kx);
+                    x = x + &format!("{:<30}", kx);
                     for &z in lt.iter() {
                         x = x + &(if let Some(w) = h.get(&z) {
-                            format!("{:>9.0}|", w.get(&k).unwrap_or(&0.0) / mult)
+                            format!("{separator}{:>9.0}", w.get(&k).unwrap_or(&0.0) / mult)
                         } else {
-                            String::from("         |")
+                            String::from(format!("{separator}         "))
                         });
                     }
                     x = x + &format!("\n");
@@ -1364,18 +1364,102 @@ impl fmt::Display for Company {
             }
 
             for &k in d.iter() {
-                x = print_items(k, h, lt, x, mult);
+                x = print_items(k, h, lt, x, mult, separator);
             }
             for &k in c.iter() {
-                x = print_items(k, h, lt, x, mult);
+                x = print_items(k, h, lt, x, mult, separator);
             }
-            x = print_items(s, h, lt, x, mult);
+            x = print_items(s, h, lt, x, mult, separator);
             if item_exist(s, h) {
                 x = x + &format!("\n");
             }
             x
         }
 
+        x = x + &format!(
+            "\nAll values in multiples of {separator}{}{separator}{mult}\n\n",
+            self.currency
+        );
+
+        let bs_ky = self.balance_sheet.iter().map(|(&d0, _)| d0).collect();
+
+        x = x + &format!("BALANCE SHEETS\n\n{:<30}", "Date");
+        for (d0, _) in self.balance_sheet.iter() {
+            x = x + &format!("{separator}  {}-{:02}", d0.year(), d0.month(),);
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in BALANCE_SHEET_MAP.iter() {
+            x = print_statements(*s, d, c, &self.balance_sheet, &bs_ky, x, mult, separator);
+        }
+
+        let (pl_ann, pl_qtr) = self.split_periods();
+        let d0 = pl_ann.iter().map(|(x0, _)| x0);
+        let d1 = pl_ann.iter().map(|(_, x1)| x1);
+        let q0 = pl_qtr.iter().map(|(x0, _)| x0);
+        let q1 = pl_qtr.iter().map(|(_, x1)| x1);
+
+        x = x + &format!("\n\nPROFIT LOSS - ANNUAL\n\n{:<30}", "Begin Date");
+        for v in d0.clone() {
+            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+        }
+        x = x + &format!("\n{:<30}", "End Date");
+        for v in d1.clone() {
+            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
+            x = print_statements(*s, d, c, &self.profit_loss, &pl_ann, x, mult, separator);
+        }
+
+        x = x + &format!("\n\nCASH FLOW - ANNUAL\n\n{:<30}", "Begin Date");
+        for v in d0 {
+            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+        }
+        x = x + &format!("\n{:<30}", "End Date");
+        for v in d1 {
+            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in CASH_FLOW_MAP.iter() {
+            x = print_statements(*s, d, c, &self.cash_flow, &pl_ann, x, mult, separator);
+        }
+
+        x = x + &format!("\n\nPROFIT LOSS - QUARTERLY\n\n{:<30}", "Begin Date");
+        for v in q0.clone() {
+            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+        }
+        x = x + &format!("\n{:<30}", "End Date");
+        for v in q1.clone() {
+            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
+            x = print_statements(*s, d, c, &self.profit_loss, &pl_qtr, x, mult, separator);
+        }
+
+        x = x + &format!("\n\nCASH FLOW - QUARTERLY\n\n{:<30}", "Begin Date");
+        for v in q0 {
+            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+        }
+        x = x + &format!("\n{:<30}", "End Date");
+        for v in q1 {
+            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+        }
+        x = x + &format!("\n\n");
+        for (s, (d, c)) in CASH_FLOW_MAP.iter() {
+            x = print_statements(*s, d, c, &self.cash_flow, &pl_qtr, x, mult, separator);
+        }
+
+        x
+    }
+
+    pub fn to_csv(&self, file: &str) {
+        std::fs::write(file, self.format_table(",", 1.0)).unwrap();
+    }
+}
+
+impl fmt::Display for Company {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mult = 1000f64.powi(
             ((std::cmp::max(
                 self.balance_sheet
@@ -1395,78 +1479,7 @@ impl fmt::Display for Company {
                 - 2,
         );
 
-        x = x + &format!("\nAll values in multiples of {} {mult}\n\n", self.currency);
-
-        let bs_ky = self.balance_sheet.iter().map(|(&d0, _)| d0).collect();
-
-        x = x + &format!("BALANCE SHEETS\n\n|{:<30}|", "Date");
-        for (d0, _) in self.balance_sheet.iter() {
-            x = x + &format!("  {}-{:02}|", d0.year(), d0.month());
-        }
-        x = x + &format!("\n\n");
-        for (s, (d, c)) in BALANCE_SHEET_MAP.iter() {
-            x = print_statements(*s, d, c, &self.balance_sheet, &bs_ky, x, mult);
-        }
-
-        let (pl_ann, pl_qtr) = self.split_periods();
-        let d0 = pl_ann.iter().map(|(x0, _)| x0);
-        let d1 = pl_ann.iter().map(|(_, x1)| x1);
-        let q0 = pl_qtr.iter().map(|(x0, _)| x0);
-        let q1 = pl_qtr.iter().map(|(_, x1)| x1);
-
-        x = x + &format!("\n\nPROFIT LOSS - ANNUAL\n\n|{:<30}|", "Begin Date");
-        for v in d0.clone() {
-            x = x + &format!("  {}-{:02}|", v.year(), v.month());
-        }
-        x = x + &format!("\n|{:<30}|", "End Date");
-        for v in d1.clone() {
-            x = x + &format!("  {}-{:02}|", v.year(), v.month());
-        }
-        x = x + &format!("\n\n");
-        for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
-            x = print_statements(*s, d, c, &self.profit_loss, &pl_ann, x, mult);
-        }
-
-        x = x + &format!("\n\nCASH FLOW - ANNUAL\n\n|{:<30}|", "Begin Date");
-        for v in d0 {
-            x = x + &format!("  {}-{:02}|", v.year(), v.month());
-        }
-        x = x + &format!("\n|{:<30}|", "End Date");
-        for v in d1 {
-            x = x + &format!("  {}-{:02}|", v.year(), v.month());
-        }
-        x = x + &format!("\n\n");
-        for (s, (d, c)) in CASH_FLOW_MAP.iter() {
-            x = print_statements(*s, d, c, &self.cash_flow, &pl_ann, x, mult);
-        }
-
-        x = x + &format!("\n\nPROFIT LOSS - QUARTERLY\n\n|{:<30}|", "Begin Date");
-        for v in q0.clone() {
-            x = x + &format!("  {}-{:02}|", v.year(), v.month());
-        }
-        x = x + &format!("\n|{:<30}|", "End Date");
-        for v in q1.clone() {
-            x = x + &format!("  {}-{:02}|", v.year(), v.month());
-        }
-        x = x + &format!("\n\n");
-        for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
-            x = print_statements(*s, d, c, &self.profit_loss, &pl_qtr, x, mult);
-        }
-
-        x = x + &format!("\n\nCASH FLOW - QUARTERLY\n\n|{:<30}|", "Begin Date");
-        for v in q0 {
-            x = x + &format!("  {}-{:02}|", v.year(), v.month());
-        }
-        x = x + &format!("\n|{:<30}|", "End Date");
-        for v in q1 {
-            x = x + &format!("  {}-{:02}|", v.year(), v.month());
-        }
-        x = x + &format!("\n\n");
-        for (s, (d, c)) in CASH_FLOW_MAP.iter() {
-            x = print_statements(*s, d, c, &self.cash_flow, &pl_qtr, x, mult);
-        }
-
-        write!(f, "{}", x)
+        write!(f, "{}", self.format_table("|", mult))
     }
 }
 
@@ -1593,7 +1606,6 @@ mod accounts {
 
         tx.set_dates_from_profit_loss().remove_calc_clean();
 
-        println!("{:?}\n\n\n", tx);
         println!(
             "{:?}\n\n\n",
             tx.get_account(NDt::from_ymd(2018, 6, 1), NDt::from_ymd(2018, 9, 1))
@@ -1615,5 +1627,8 @@ mod accounts {
         );
 
         println!("{}", tx);
+
+        // std::fs::write("./tms.ron", ron::to_string(&tx).unwrap()).unwrap();
+        // tx.to_csv("./tata.csv");
     }
 }
