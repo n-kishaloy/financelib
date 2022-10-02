@@ -17,6 +17,7 @@ You may see the github repository at <https://github.com/n-kishaloy/financelib>
 pub mod derivatives;
 pub mod fixedincomes;
 pub mod statements;
+pub mod valuations;
 
 use chrono::{naive::NaiveDate as NDt, Datelike};
 use time::util::{days_in_year, is_leap_year};
@@ -72,9 +73,8 @@ Note that the ACTACT formula is different from MS Excel and follows the Actual/A
 The yearfrac function is also signed with the result coming as negative in case dt0 > dt1. This is different from MS Excel, where the yearfrac number return absolute difference between the dates. Use abs() at end to replicate the same.
 */
 pub fn yearfrac(dt0: NDt, dt1: NDt, basis: DayCountConvention) -> f64 {
-    fn day_count_factor(y0: i32, m0: i32, d0: i32, y1: i32, m1: i32, d1: i32) -> f64 {
-        ((y1 - y0) * 360 + (m1 - m0) * 30 + (d1 - d0)) as f64 / 360.0
-    }
+    let day_count_factor =
+        |y0, m0, d0, y1, m1, d1| ((y1 - y0) * 360 + (m1 - m0) * 30 + (d1 - d0)) as f64 / 360.0;
 
     match basis {
         ACT360 => ((dt1 - dt0).num_days() as f64) / 360.0,

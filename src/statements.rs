@@ -198,7 +198,9 @@ This is primarily used in creating Hashmap for keeping Cash Flow items.
  */
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
 pub enum FinOthersTyp {
-    Taxrate,
+    CorporateTaxRate,
+    GrossProfitTaxRate,
+    RevenueTaxRate,
     CurrentRatio,
     AcidRatio,
     DaysOfInventory,
@@ -234,6 +236,7 @@ use std::{
 
 use BsType::*;
 use CfType::*;
+use FinOthersTyp::*;
 use PlType::*;
 
 lazy_static! {
@@ -1449,12 +1452,49 @@ impl Company {
         for (s, (d, c)) in CASH_FLOW_MAP.iter() {
             x = print_statements(*s, d, c, &self.cash_flow, &pl_qtr, x, mult, separator);
         }
-
         x
     }
 
     pub fn to_csv(&self, file: &str) {
         std::fs::write(file, self.format_table(",", 1.0)).unwrap();
+    }
+
+    pub fn flat_taxrate(&mut self, tax_rate: f64) -> &mut Self {
+        for y in self.profit_loss.keys() {
+            if let Some(z) = self.others.get_mut(y) {
+                z.insert(CorporateTaxRate, tax_rate);
+            } else {
+                self.others
+                    .insert(*y, HashMap::from([(CorporateTaxRate, tax_rate)]));
+            }
+        }
+        self
+    }
+
+    pub fn calc_other(&mut self) -> &mut Self {
+        // TODO: Calculate others
+        todo!()
+    }
+
+    pub fn get_balance_sheet(&self, d: NDt, ty: BsType) -> f64 {
+        *self.balance_sheet.get(&d).unwrap().get(&ty).unwrap_or(&0.0)
+    }
+
+    pub fn get_profit_loss(&self, d: (NDt, NDt), ty: PlType) -> f64 {
+        *self.profit_loss.get(&d).unwrap().get(&ty).unwrap_or(&0.0)
+    }
+
+    pub fn get_cash_flow(&self, d: (NDt, NDt), ty: CfType) -> f64 {
+        *self.cash_flow.get(&d).unwrap().get(&ty).unwrap_or(&0.0)
+    }
+
+    pub fn put_balance_sheet(&mut self, d: NDt, ty: BsType, val: f64) -> &mut Self {
+        if ty.is_calc() {
+            panic!("Type {:?} is a calculated item", ty)
+        } else {
+            self.balance_sheet.get_mut(&d).unwrap().insert(ty, val);
+        }
+        self
     }
 }
 
@@ -1602,33 +1642,54 @@ mod accounts {
         // println!("{:?}", cf);
 
         let mut tx: Company =
-            ron::from_str(&std::fs::read_to_string("./tatamotors.ron").unwrap()).unwrap();
+            ron::from_str(&std::fs::read_to_string("./testdocs/tatamotors.ron").unwrap()).unwrap();
 
         tx.set_dates_from_profit_loss().remove_calc_clean();
 
-        println!(
-            "{:?}\n\n\n",
+        assert_eq!(
             tx.get_account(NDt::from_ymd(2018, 6, 1), NDt::from_ymd(2018, 9, 1))
+                .unwrap()
+                .balance_sheet_beg,
+            None
         );
 
         tx.calc_elements();
-        println!(
-            "{:?}\n\n\n",
-            tx.get_account(NDt::from_ymd(2018, 3, 1), NDt::from_ymd(2019, 3, 1))
+        assert_eq!(
+            (tx.get_account(NDt::from_ymd(2018, 3, 1), NDt::from_ymd(2019, 3, 1))
+                .unwrap()
+                .balance_sheet_beg
+                .unwrap())[&Inventories],
+            82172000000.0
         );
-
-        println!("{:?}\n\n\n", tx.split_periods());
-
+        // println!("{:?}\n\n\n", tx.split_periods());
         tx.calc_cash_flow();
 
-        println!(
-            "{:?}\n\n\n",
-            tx.get_account(NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1))
-        );
+        assert!(approx(
+            tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables),
+            8237000000.0
+        ));
+
+        assert!(approx(
+            tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), Assets),
+            142767000000.0
+        ));
+
+        assert!(approx(
+            tx.get_profit_loss((NDt::from_ymd(2019, 3, 1), NDt::from_ymd(2019, 6, 1)), Pat),
+            -3698000000.0
+        ));
+
+        assert!(approx(
+            tx.get_cash_flow(
+                (NDt::from_ymd(2019, 3, 1), NDt::from_ymd(2020, 3, 1)),
+                CashFlowOperations
+            ),
+            26276000000.0
+        ));
 
         println!("{}", tx);
 
-        // std::fs::write("./tms.ron", ron::to_string(&tx).unwrap()).unwrap();
-        // tx.to_csv("./tata.csv");
+        // std::fs::write("./testdocs/tms.ron", ron::to_string(&tx).unwrap()).unwrap();
+        // tx.to_csv("./testdocs/tata.csv");
     }
 }
