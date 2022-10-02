@@ -1337,7 +1337,7 @@ impl Company {
                 h.iter()
                     .map(|(_, b)| b.get(&k).unwrap_or(&0.0).abs())
                     .sum::<f64>()
-                    > 0.0
+                    > 0.01
             }
 
             fn print_items<
@@ -1490,9 +1490,27 @@ impl Company {
 
     pub fn put_balance_sheet(&mut self, d: NDt, ty: BsType, val: f64) -> &mut Self {
         if ty.is_calc() {
-            panic!("Type {:?} is a calculated item", ty)
+            panic!("{:?} is a calculated item", ty)
         } else {
             self.balance_sheet.get_mut(&d).unwrap().insert(ty, val);
+        }
+        self
+    }
+
+    pub fn put_profit_loss(&mut self, d: (NDt, NDt), ty: PlType, val: f64) -> &mut Self {
+        if ty.is_calc() {
+            panic!("{:?} is a calculated item", ty)
+        } else {
+            self.profit_loss.get_mut(&d).unwrap().insert(ty, val);
+        }
+        self
+    }
+
+    pub fn put_cash_flow(&mut self, d: (NDt, NDt), ty: CfType, val: f64) -> &mut Self {
+        if ty.is_calc() {
+            panic!("{:?} is a calculated item", ty)
+        } else {
+            self.cash_flow.get_mut(&d).unwrap().insert(ty, val);
         }
         self
     }
@@ -1664,9 +1682,45 @@ mod accounts {
         // println!("{:?}\n\n\n", tx.split_periods());
         tx.calc_cash_flow();
 
+        // tx.put_balance_sheet(NDt::from_ymd(2013, 3, 1), CurrentAssets, 50000.0);
+        // This fails as CurrentAssets is a calculated item
+
         assert!(approx(
             tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables),
             8237000000.0
+        ));
+
+        tx.put_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables, 512_000_000.0)
+            .put_balance_sheet(NDt::from_ymd(2013, 3, 1), FinishedGoods, 256_000_000.0)
+            .put_balance_sheet(NDt::from_ymd(2013, 3, 1), RawMaterials, 600_000_000.0);
+
+        assert!(approx(
+            tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables),
+            512000000.0
+        ));
+
+        assert!(approx(
+            tx.get_balance_sheet(NDt::from_ymd(2013, 3, 1), RawMaterials),
+            600000000.0
+        ));
+
+        tx.put_balance_sheet(NDt::from_ymd(2013, 3, 1), RawMaterials, 0.0);
+
+        tx.put_balance_sheet(
+            NDt::from_ymd(2012, 3, 1),
+            CurrentReceivables,
+            8237_000_000.0,
+        )
+        .put_balance_sheet(NDt::from_ymd(2013, 3, 1), FinishedGoods, 21037_000_000.0);
+
+        assert!(approx(
+            tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables),
+            8237000000.0
+        ));
+
+        assert!(approx(
+            tx.get_balance_sheet(NDt::from_ymd(2013, 3, 1), FinishedGoods),
+            21037000000.0
         ));
 
         assert!(approx(
@@ -1686,6 +1740,44 @@ mod accounts {
             ),
             26276000000.0
         ));
+
+        tx.put_profit_loss(
+            (NDt::from_ymd(2012, 3, 1), NDt::from_ymd(2013, 3, 1)),
+            InterestExpense,
+            13560e+6,
+        )
+        .put_cash_flow(
+            (NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1)),
+            AdjustmentsRetainedEarnings,
+            22982e+6,
+        );
+
+        assert!(approx(
+            tx.get_profit_loss(
+                (NDt::from_ymd(2012, 3, 1), NDt::from_ymd(2013, 3, 1)),
+                InterestExpense
+            ),
+            13560e+6
+        ));
+
+        assert!(approx(
+            tx.get_cash_flow(
+                (NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1)),
+                AdjustmentsRetainedEarnings
+            ),
+            22982e+6
+        ));
+
+        tx.put_profit_loss(
+            (NDt::from_ymd(2012, 3, 1), NDt::from_ymd(2013, 3, 1)),
+            InterestExpense,
+            3560e+6,
+        )
+        .put_cash_flow(
+            (NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1)),
+            AdjustmentsRetainedEarnings,
+            2982e+6,
+        );
 
         println!("{}", tx);
 
