@@ -20,6 +20,7 @@ pub mod statements;
 pub mod valuations;
 
 use chrono::{naive::NaiveDate as NDt, Datelike};
+use serde::{Deserialize, Serialize};
 use time::util::{days_in_year, is_leap_year};
 use DayCountConvention::*;
 
@@ -105,6 +106,16 @@ pub fn yearfrac(dt0: NDt, dt1: NDt, basis: DayCountConvention) -> f64 {
             day_count_factor(y0, m0, d0, y1, m1, d1)
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Currency {
+    INR,
+    USD,
+    NGN,
+    EUR,
+    GBP,
+    CNY,
 }
 
 /** Discount factor for 1 period = 1/(1+r)

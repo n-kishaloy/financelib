@@ -175,6 +175,7 @@ pub enum CfType {
     OtherCashFlowOperations,
     CashFlowOperations,
     ChangePPE,
+    ChangeReserves,
     InvestmentsCapDevp,
     InvestmentsLoans,
     ChangeEquityAssets,
@@ -189,6 +190,10 @@ pub enum CfType {
     OtherCashFlowFinancing,
     CashFlowFinancing,
     NetCashFlow,
+    FreeCashFlowFirm,
+    TaxShield,
+    FreeCashFlowEquity,
+    CashFlowDebt,
 }
 
 /**
@@ -205,10 +210,6 @@ pub enum FinOthersTyp {
     AcidRatio,
     DaysOfInventory,
     InventoryTurnoverRatio,
-    FCFF,
-    FCFS,
-    FCFE,
-    FCFD,
 }
 
 /**
@@ -238,6 +239,8 @@ use BsType::*;
 use CfType::*;
 use FinOthersTyp::*;
 use PlType::*;
+
+use crate::Currency;
 
 lazy_static! {
     static ref BALANCE_SHEET_MAP: Vec<(BsType, (Vec<BsType>, Vec<BsType>))> = vec![
@@ -444,7 +447,7 @@ lazy_static! {
         (
             CashFlowInvestments,
             (
-                vec![OtherCashFlowInvestments],
+                vec![OtherCashFlowInvestments, ChangeReserves],
                 vec![
                     ChangePPE,
                     InvestmentsCapDevp,
@@ -472,6 +475,18 @@ lazy_static! {
                 vec![CashFlowOperations, CashFlowInvestments, CashFlowFinancing],
                 vec![]
             )
+        ),
+        (
+            FreeCashFlowEquity,
+            (
+                vec![CashFlowOperations, ChangeDebt, ChangeReserves],
+                vec![CashFlowInterests, ChangePPE]
+            )
+        ),
+        (CashFlowDebt, (vec![CashFlowInterests], vec![ChangeDebt])),
+        (
+            FreeCashFlowFirm,
+            (vec![FreeCashFlowEquity, CashFlowDebt], vec![TaxShield])
         )
     ];
     static ref CASH_FLOW_BALANCE_SHEET: Vec<(CfType, (Vec<BsType>, Vec<BsType>))> = vec![
@@ -544,10 +559,11 @@ lazy_static! {
         (ChangeAccumulatedOci, (vec![AccumulatedOci,], vec![])),
         (
             ChangePPE,
-            (
-                vec![PlantPropertyEquipment, LeasingRentalAssets,],
-                vec![RevaluationReserves, Reserves,],
-            )
+            (vec![PlantPropertyEquipment, LeasingRentalAssets,], vec![])
+        ),
+        (
+            ChangeReserves,
+            (vec![RevaluationReserves, Reserves,], vec![])
         ),
         (
             InvestmentsCapDevp,
@@ -891,7 +907,14 @@ Note that you have to still run the calc_elements function to compute the full
 Cash Flow statement. This function just provides an easy way to derive them of
 a Balance Sheet.
  */
-pub fn calc_cash_flow(b0: &BsMap, b1: &BsMap, pl: &PlMap) -> CfMap {
+pub fn calc_cash_flow(
+    b0: &BsMap,
+    b1: &BsMap,
+    pl: &PlMap,
+    corp_tax: f64,
+    gp_tax: f64,
+    revenue_tax: f64,
+) -> CfMap {
     let mut cf = CfMap::new();
     for (k, (d, b)) in CASH_FLOW_PROFIT_LOSS.iter() {
         let elem = calc_elem(pl, d, b);
@@ -905,6 +928,16 @@ pub fn calc_cash_flow(b0: &BsMap, b1: &BsMap, pl: &PlMap) -> CfMap {
             cf.insert(*k, elem);
         }
     }
+
+    let intr = cf.get(&CashFlowInterests).unwrap_or(&0.0);
+    let ebit_tx = corp_tax * (pl.get(&Pbtx).unwrap_or(&0.0) + intr);
+    let gr_tx = gp_tax * pl.get(&GrossProfit).unwrap_or(&0.0);
+    let rev_tx = revenue_tax * pl.get(&Revenue).unwrap_or(&0.0);
+
+    cf.insert(
+        TaxShield,
+        f64::min(corp_tax * intr, f64::max(0.0, ebit_tx + gr_tx - rev_tx)),
+    );
     cf
 }
 
@@ -1006,7 +1039,7 @@ pub struct FinOthers {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Account {
+pub struct PeriodReport {
     pub date_beg: NDt,
     pub date_end: NDt,
 
@@ -1018,7 +1051,7 @@ pub struct Account {
     pub others: Option<FinOthersMap>,
 }
 
-impl Account {
+impl PeriodReport {
     pub fn to_statements(
         &self,
     ) -> (
@@ -1072,7 +1105,7 @@ impl Account {
                 && date_end == dct1
                 && date_end == dft1
             {
-                Some(Account {
+                Some(PeriodReport {
                     date_beg,
                     date_end,
                     balance_sheet_beg,
@@ -1100,10 +1133,20 @@ impl Account {
         let pl = get_hm(&self.profit_loss).unwrap();
         let b_beg = get_hm(&self.balance_sheet_beg);
         let b_end = get_hm(&self.balance_sheet_end);
+        let oth = self.others.clone().unwrap();
         let cf = match (&b_beg, &b_end) {
-            (Some(bs_b), Some(bs_e)) => {
-                Some(calc_cash_flow(&bs_b, &bs_e, &pl).calc_elements().clone())
-            }
+            (Some(bs_b), Some(bs_e)) => Some(
+                calc_cash_flow(
+                    &bs_b,
+                    &bs_e,
+                    &pl,
+                    oth[&CorporateTaxRate],
+                    oth[&GrossProfitTaxRate],
+                    oth[&RevenueTaxRate],
+                )
+                .calc_elements()
+                .clone(),
+            ),
             (_, _) => None,
         };
 
@@ -1171,23 +1214,17 @@ impl Account {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Company {
-    pub code: String,
-    pub link: String,
-    pub affiliation: HashMap<Industry, f64>,
-    pub currency: String,
+pub struct Accounts {
+    pub currency: Currency,
     pub consolidated: bool,
     pub dates: BTreeSet<NDt>,
     pub balance_sheet: BTreeMap<NDt, BsMap>,
     pub profit_loss: BTreeMap<(NDt, NDt), PlMap>,
     pub cash_flow: BTreeMap<(NDt, NDt), CfMap>,
     pub others: BTreeMap<(NDt, NDt), FinOthersMap>,
-    pub share_price: BTreeMap<NDt, f64>,
-    pub rate: BTreeMap<NDt, Param>,
-    pub beta: BTreeMap<NDt, Param>,
 }
 
-impl Company {
+impl Accounts {
     pub fn valid_date(&self, dt: NDt) -> bool {
         self.dates.contains(&dt)
     }
@@ -1261,7 +1298,7 @@ impl Company {
         self
     }
 
-    pub fn get_account(&self, d0: NDt, d1: NDt) -> Option<Account> {
+    pub fn get_account(&self, d0: NDt, d1: NDt) -> Option<PeriodReport> {
         if let Some(pl) = self.profit_loss.get(&(d0, d1)) {
             fn get_hashmap<K: Hash + Eq + Ord, T: Hash + Clone>(
                 k: K,
@@ -1270,7 +1307,7 @@ impl Company {
                 Some(h.get(&k)?.clone())
             }
 
-            Some(Account {
+            Some(PeriodReport {
                 date_beg: d0,
                 date_end: d1,
                 balance_sheet_beg: get_hashmap(d0, &self.balance_sheet),
@@ -1288,12 +1325,16 @@ impl Company {
         for &(d0, d1) in self.profit_loss.keys() {
             match (self.balance_sheet.get(&d0), self.balance_sheet.get(&d1)) {
                 (Some(b0), Some(b1)) => {
-                    self.cash_flow.insert(
-                        (d0, d1),
-                        calc_cash_flow(b0, b1, self.profit_loss.get(&(d0, d1)).unwrap())
-                            .calc_elements()
-                            .clone(),
+                    let oth = self.others.get(&(d0, d1)).unwrap();
+                    let mut cf = calc_cash_flow(
+                        b0,
+                        b1,
+                        self.profit_loss.get(&(d0, d1)).unwrap(),
+                        oth[&CorporateTaxRate],
+                        oth[&GrossProfitTaxRate],
+                        oth[&RevenueTaxRate],
                     );
+                    self.cash_flow.insert((d0, d1), cf.calc_elements().clone());
                 }
                 _ => (),
             }
@@ -1301,26 +1342,22 @@ impl Company {
         self
     }
 
-    pub fn to_account_vec(&self) -> Vec<Account> {
+    pub fn to_account_vec(&self) -> Vec<PeriodReport> {
         self.profit_loss
             .keys()
             .map(|&(d0, d1)| self.get_account(d0, d1).unwrap())
             .collect()
     }
 
-    pub fn from_account_vec(&mut self, _ac_vec: &Vec<Account>) -> &mut Self {
+    pub fn from_account_vec(&mut self, _ac_vec: &Vec<PeriodReport>) -> &mut Self {
         // TODO: Add implementation
         todo!()
     }
 
     pub fn format_table(&self, separator: &str, mult: f64) -> String {
-        let mut x = format!("Code: {}\n", self.code);
-        x = x + &format!("Link: {}\n", self.link);
+        let mut x = String::from("");
 
-        fn print_statements<
-            K: Hash + Eq + Ord + Copy,
-            T: FinType + Hash + Copy + Eq + std::fmt::Debug,
-        >(
+        fn print_statements<K: Hash + Eq + Ord + Copy, T: Hash + Copy + Eq + std::fmt::Debug>(
             s: T,
             d: &Vec<T>,
             c: &Vec<T>,
@@ -1330,20 +1367,17 @@ impl Company {
             mult: f64,
             separator: &str,
         ) -> String {
-            fn item_exist<K: Hash + Eq + Copy, T: FinType + Hash + Copy + Eq>(
+            fn item_exist<K: Hash + Eq + Copy, T: Hash + Copy + Eq>(
                 k: T,
                 h: &BTreeMap<K, HashMap<T, f64>>,
             ) -> bool {
                 h.iter()
                     .map(|(_, b)| b.get(&k).unwrap_or(&0.0).abs())
                     .sum::<f64>()
-                    > 0.01
+                    > 0.0001
             }
 
-            fn print_items<
-                K: Hash + Eq + Ord + Copy,
-                T: FinType + Hash + Copy + Eq + std::fmt::Debug,
-            >(
+            fn print_items<K: Hash + Eq + Ord + Copy, T: Hash + Copy + Eq + std::fmt::Debug>(
                 k: T,
                 h: &BTreeMap<K, HashMap<T, f64>>,
                 lt: &BTreeSet<K>,
@@ -1356,7 +1390,12 @@ impl Company {
                     x = x + &format!("{:<30}", kx);
                     for &z in lt.iter() {
                         x = x + &(if let Some(w) = h.get(&z) {
-                            format!("{separator}{:>9.0}", w.get(&k).unwrap_or(&0.0) / mult)
+                            let itm = *w.get(&k).unwrap_or(&0.0);
+                            if itm < 1.0 && itm > 0.0001 {
+                                format!("{separator}{:>8.1}%", itm * 100.0)
+                            } else {
+                                format!("{separator}{:>9.0}", itm / mult)
+                            }
                         } else {
                             String::from(format!("{separator}         "))
                         });
@@ -1380,7 +1419,7 @@ impl Company {
         }
 
         x = x + &format!(
-            "\nAll values in multiples of {separator}{}{separator}{mult}\n\n",
+            "\nAll values in multiples of {separator}{:?}{separator}{mult}\n\n",
             self.currency
         );
 
@@ -1414,6 +1453,18 @@ impl Company {
             x = print_statements(*s, d, c, &self.profit_loss, &pl_ann, x, mult, separator);
         }
 
+        x = x + &format!("\n\n");
+        x = print_statements(
+            RevenueTaxRate,
+            &vec![CorporateTaxRate, GrossProfitTaxRate],
+            &vec![],
+            &self.others,
+            &pl_ann,
+            x,
+            1.0,
+            separator,
+        );
+
         x = x + &format!("\n\nCASH FLOW - ANNUAL\n\n{:<30}", "Begin Date");
         for v in d0 {
             x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
@@ -1427,30 +1478,43 @@ impl Company {
             x = print_statements(*s, d, c, &self.cash_flow, &pl_ann, x, mult, separator);
         }
 
-        x = x + &format!("\n\nPROFIT LOSS - QUARTERLY\n\n{:<30}", "Begin Date");
-        for v in q0.clone() {
-            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
-        }
-        x = x + &format!("\n{:<30}", "End Date");
-        for v in q1.clone() {
-            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
-        }
-        x = x + &format!("\n\n");
-        for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
-            x = print_statements(*s, d, c, &self.profit_loss, &pl_qtr, x, mult, separator);
-        }
+        if !(pl_qtr.is_empty()) {
+            x = x + &format!("\n\nPROFIT LOSS - QUARTERLY\n\n{:<30}", "Begin Date");
+            for v in q0.clone() {
+                x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+            }
+            x = x + &format!("\n{:<30}", "End Date");
+            for v in q1.clone() {
+                x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+            }
+            x = x + &format!("\n\n");
+            for (s, (d, c)) in PROFIT_LOSS_MAP.iter() {
+                x = print_statements(*s, d, c, &self.profit_loss, &pl_qtr, x, mult, separator);
+            }
+            x = x + &format!("\n\n");
+            x = print_statements(
+                RevenueTaxRate,
+                &vec![CorporateTaxRate, GrossProfitTaxRate],
+                &vec![],
+                &self.others,
+                &pl_qtr,
+                x,
+                1.0,
+                separator,
+            );
 
-        x = x + &format!("\n\nCASH FLOW - QUARTERLY\n\n{:<30}", "Begin Date");
-        for v in q0 {
-            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
-        }
-        x = x + &format!("\n{:<30}", "End Date");
-        for v in q1 {
-            x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
-        }
-        x = x + &format!("\n\n");
-        for (s, (d, c)) in CASH_FLOW_MAP.iter() {
-            x = print_statements(*s, d, c, &self.cash_flow, &pl_qtr, x, mult, separator);
+            x = x + &format!("\n\nCASH FLOW - QUARTERLY\n\n{:<30}", "Begin Date");
+            for v in q0 {
+                x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+            }
+            x = x + &format!("\n{:<30}", "End Date");
+            for v in q1 {
+                x = x + &format!("{separator}  {}-{:02}", v.year(), v.month());
+            }
+            x = x + &format!("\n\n");
+            for (s, (d, c)) in CASH_FLOW_MAP.iter() {
+                x = print_statements(*s, d, c, &self.cash_flow, &pl_qtr, x, mult, separator);
+            }
         }
         x
     }
@@ -1459,16 +1523,34 @@ impl Company {
         std::fs::write(file, self.format_table(",", 1.0)).unwrap();
     }
 
-    pub fn flat_taxrate(&mut self, tax_rate: f64) -> &mut Self {
+    pub fn set_tax_rates(
+        &mut self,
+        corp_tax: f64,
+        gross_profit_tax: f64,
+        revenue_tax: f64,
+    ) -> &mut Self {
         for y in self.profit_loss.keys() {
             if let Some(z) = self.others.get_mut(y) {
-                z.insert(CorporateTaxRate, tax_rate);
+                z.insert(CorporateTaxRate, corp_tax);
+                z.insert(GrossProfitTaxRate, gross_profit_tax);
+                z.insert(RevenueTaxRate, revenue_tax);
             } else {
-                self.others
-                    .insert(*y, HashMap::from([(CorporateTaxRate, tax_rate)]));
+                self.others.insert(
+                    *y,
+                    HashMap::from([
+                        (CorporateTaxRate, corp_tax),
+                        (GrossProfitTaxRate, gross_profit_tax),
+                        (RevenueTaxRate, revenue_tax),
+                    ]),
+                );
             }
         }
         self
+    }
+
+    pub fn calc_free_cash_flows(&mut self) -> &mut Self {
+        // TODO: Add free cash flow calculations
+        todo!();
     }
 
     pub fn calc_other(&mut self) -> &mut Self {
@@ -1516,7 +1598,7 @@ impl Company {
     }
 }
 
-impl fmt::Display for Company {
+impl fmt::Display for Accounts {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mult = 1000f64.powi(
             ((std::cmp::max(
@@ -1575,7 +1657,7 @@ mod accounts {
 
     #[test]
     fn account_check() {
-        let ac1 = Account {
+        let ac1 = PeriodReport {
             date_beg: NDt::from_ymd(2009, 05, 22),
             date_end: NDt::from_ymd(2010, 09, 27),
 
@@ -1593,7 +1675,7 @@ mod accounts {
         };
 
         let ac_js = serde_json::to_string(&ac1).unwrap();
-        let acx: Account = serde_json::from_str(&ac_js).unwrap();
+        let acx: PeriodReport = serde_json::from_str(&ac_js).unwrap();
         // println!("{:?} !true => {}", acx, !true);
 
         let bg = acx.balance_sheet_beg.clone().unwrap();
@@ -1659,7 +1741,7 @@ mod accounts {
 
         // println!("{:?}", cf);
 
-        let mut tx: Company =
+        let mut tx: Accounts =
             ron::from_str(&std::fs::read_to_string("./testdocs/tatamotors.ron").unwrap()).unwrap();
 
         tx.set_dates_from_profit_loss().remove_calc_clean();
@@ -1671,7 +1753,7 @@ mod accounts {
             None
         );
 
-        tx.calc_elements();
+        tx.calc_elements().set_tax_rates(0.1, 0.02, 0.005);
         assert_eq!(
             (tx.get_account(NDt::from_ymd(2018, 3, 1), NDt::from_ymd(2019, 3, 1))
                 .unwrap()
@@ -1680,7 +1762,17 @@ mod accounts {
             82172000000.0
         );
         // println!("{:?}\n\n\n", tx.split_periods());
+        println!("{}", tx);
         tx.calc_cash_flow();
+        // println!("{}", tx);
+
+        assert!(approx(
+            tx.get_cash_flow(
+                (NDt::from_ymd(2013, 3, 1), NDt::from_ymd(2014, 03, 1)),
+                NetCashFlow
+            ),
+            8599e+6
+        ));
 
         // tx.put_balance_sheet(NDt::from_ymd(2013, 3, 1), CurrentAssets, 50000.0);
         // This fails as CurrentAssets is a calculated item
@@ -1778,6 +1870,14 @@ mod accounts {
             AdjustmentsRetainedEarnings,
             2982e+6,
         );
+
+        assert!(approx(
+            tx.get_cash_flow(
+                (NDt::from_ymd(2014, 3, 1), NDt::from_ymd(2015, 3, 1)),
+                NetCashFlow
+            ),
+            2404e+6
+        ));
 
         println!("{}", tx);
 
