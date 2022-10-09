@@ -102,6 +102,7 @@ pub enum BsType {
     AccumulatedOci,
     MinorityInterests,
     Equity,
+    BalanceSheetCheck,
 }
 
 /**
@@ -127,23 +128,24 @@ pub enum PlType {
     OtherExpenses,
     ExceptionalItems,
     GrossProfit,
-    Pbitda,
+    EBITDA,
     Depreciation,
+    TaxDepreciation,
     AssetImpairment,
     LossDivestitures,
     Amortization,
-    Pbitx,
+    EBITX,
     InterestRevenue,
     InterestExpense,
     CostDebt,
     OtherFinancialRevenue,
-    Pbtx,
+    EBTX,
     ExtraordinaryItems,
     PriorYears,
-    Pbt,
+    EBT,
     TaxesCurrent,
     TaxesDeferred,
-    Pat,
+    EAT,
     NetIncomeDiscontinuedOps,
     NetIncome,
     Dividends,
@@ -359,6 +361,7 @@ lazy_static! {
                 vec![],
             )
         ),
+        (BalanceSheetCheck, (vec![Assets], vec![Liabilities, Equity]))
     ];
     static ref PROFIT_LOSS_MAP: Vec<(PlType, (Vec<PlType>, Vec<PlType>))> = vec![
         (
@@ -371,7 +374,7 @@ lazy_static! {
         (COGS, (vec![CostMaterial, DirectExpenses], vec![],)),
         (GrossProfit, (vec![Revenue], vec![COGS],)),
         (
-            Pbitda,
+            EBITDA,
             (
                 vec![GrossProfit, OtherIncome],
                 vec![
@@ -386,9 +389,9 @@ lazy_static! {
             )
         ),
         (
-            Pbitx,
+            EBITX,
             (
-                vec![Pbitda],
+                vec![EBITDA],
                 vec![
                     Depreciation,
                     AssetImpairment,
@@ -398,15 +401,15 @@ lazy_static! {
             )
         ),
         (
-            Pbtx,
+            EBTX,
             (
-                vec![Pbitx, InterestRevenue, OtherFinancialRevenue],
+                vec![EBITX, InterestRevenue, OtherFinancialRevenue],
                 vec![InterestExpense, CostDebt],
             )
         ),
-        (Pbt, (vec![Pbtx], vec![ExtraordinaryItems, PriorYears],)),
-        (Pat, (vec![Pbt], vec![TaxesCurrent, TaxesDeferred],)),
-        (NetIncome, (vec![Pat, NetIncomeDiscontinuedOps], vec![],)),
+        (EBT, (vec![EBTX], vec![ExtraordinaryItems, PriorYears],)),
+        (EAT, (vec![EBT], vec![TaxesCurrent, TaxesDeferred],)),
+        (NetIncome, (vec![EAT, NetIncomeDiscontinuedOps], vec![],)),
         (
             ContributionRetainedEarnings,
             (vec![NetIncome], vec![Dividends])
@@ -661,14 +664,14 @@ fn debit_mapping(
     calc_neg: BalanceSheetEntry,
 ) {
     let (a, b) = BALANCE_SHEET_HASHMAP[&calc_type];
-    for x in a.iter() {
+    for x in a {
         if BALANCE_SHEET_CALC.contains(x) {
             debit_mapping(debit_map, *x, calc_pos, calc_neg)
         } else {
             debit_map.insert(*x, calc_pos);
         }
     }
-    for x in b.iter() {
+    for x in b {
         if BALANCE_SHEET_CALC.contains(x) {
             debit_mapping(debit_map, *x, calc_neg, calc_pos)
         } else {
@@ -734,7 +737,7 @@ pub trait FinMaps {
 
     /** add items from a vector of tuples */
     fn add_vec(&mut self, x: &Vec<(Self::Key, f64)>) -> &mut Self {
-        for (k, v) in x.iter() {
+        for (k, v) in x {
             self.add(*k, *v);
         }
         self
@@ -742,7 +745,7 @@ pub trait FinMaps {
 
     /** upsert items from a vector of tuples */
     fn upsert_vec(&mut self, x: &Vec<(Self::Key, f64)>) -> &mut Self {
-        for (k, v) in x.iter() {
+        for (k, v) in x {
             self.upsert(*k, *v);
         }
         self
@@ -765,6 +768,8 @@ impl FinMaps for BsMap {
             let p = calc_elem(self, d, b);
             if p.abs() > 1e-5 {
                 self.insert(*k, p);
+            } else {
+                self.remove(k);
             }
         }
         self
@@ -850,6 +855,8 @@ impl FinMaps for PlMap {
             let p = calc_elem(self, d, b);
             if p.abs() > 1e-5 {
                 self.insert(*k, p);
+            } else {
+                self.remove(k);
             }
         }
         self
@@ -930,7 +937,7 @@ pub fn calc_cash_flow(
     }
 
     let intr = cf.get(&CashFlowInterests).unwrap_or(&0.0);
-    let ebit_tx = corp_tax * (pl.get(&Pbtx).unwrap_or(&0.0) + intr);
+    let ebit_tx = corp_tax * (pl.get(&EBTX).unwrap_or(&0.0) + intr);
     let gr_tx = gp_tax * pl.get(&GrossProfit).unwrap_or(&0.0);
     let rev_tx = revenue_tax * pl.get(&Revenue).unwrap_or(&0.0);
 
@@ -949,6 +956,8 @@ impl FinMaps for CfMap {
             let p = calc_elem(self, d, b);
             if p.abs() > 1e-5 {
                 self.insert(*k, p);
+            } else {
+                self.remove(k);
             }
         }
         self
@@ -1039,7 +1048,7 @@ pub struct FinOthers {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct PeriodReport {
+pub struct FinancialReport {
     pub date_beg: NDt,
     pub date_end: NDt,
 
@@ -1051,7 +1060,7 @@ pub struct PeriodReport {
     pub others: Option<FinOthersMap>,
 }
 
-impl PeriodReport {
+impl FinancialReport {
     pub fn to_statements(
         &self,
     ) -> (
@@ -1105,7 +1114,7 @@ impl PeriodReport {
                 && date_end == dct1
                 && date_end == dft1
             {
-                Some(PeriodReport {
+                Some(FinancialReport {
                     date_beg,
                     date_end,
                     balance_sheet_beg,
@@ -1298,7 +1307,7 @@ impl Accounts {
         self
     }
 
-    pub fn get_account(&self, d0: NDt, d1: NDt) -> Option<PeriodReport> {
+    pub fn get_account(&self, d0: NDt, d1: NDt) -> Option<FinancialReport> {
         if let Some(pl) = self.profit_loss.get(&(d0, d1)) {
             fn get_hashmap<K: Hash + Eq + Ord, T: Hash + Clone>(
                 k: K,
@@ -1307,7 +1316,7 @@ impl Accounts {
                 Some(h.get(&k)?.clone())
             }
 
-            Some(PeriodReport {
+            Some(FinancialReport {
                 date_beg: d0,
                 date_end: d1,
                 balance_sheet_beg: get_hashmap(d0, &self.balance_sheet),
@@ -1342,14 +1351,14 @@ impl Accounts {
         self
     }
 
-    pub fn to_account_vec(&self) -> Vec<PeriodReport> {
+    pub fn to_account_vec(&self) -> Vec<FinancialReport> {
         self.profit_loss
             .keys()
             .map(|&(d0, d1)| self.get_account(d0, d1).unwrap())
             .collect()
     }
 
-    pub fn from_account_vec(&mut self, _ac_vec: &Vec<PeriodReport>) -> &mut Self {
+    pub fn from_account_vec(&mut self, _ac_vec: &Vec<FinancialReport>) -> &mut Self {
         // TODO: Add implementation
         todo!()
     }
@@ -1388,7 +1397,7 @@ impl Accounts {
                 if item_exist(k, h) {
                     let kx = format!("{:?}", k);
                     x = x + &format!("{:<30}", kx);
-                    for &z in lt.iter() {
+                    for &z in lt {
                         x = x + &(if let Some(w) = h.get(&z) {
                             let itm = *w.get(&k).unwrap_or(&0.0);
                             if itm < 1.0 && itm > 0.0001 {
@@ -1405,10 +1414,10 @@ impl Accounts {
                 x
             }
 
-            for &k in d.iter() {
+            for &k in d {
                 x = print_items(k, h, lt, x, mult, separator);
             }
-            for &k in c.iter() {
+            for &k in c {
                 x = print_items(k, h, lt, x, mult, separator);
             }
             x = print_items(s, h, lt, x, mult, separator);
@@ -1548,11 +1557,6 @@ impl Accounts {
         self
     }
 
-    pub fn calc_free_cash_flows(&mut self) -> &mut Self {
-        // TODO: Add free cash flow calculations
-        todo!();
-    }
-
     pub fn calc_other(&mut self) -> &mut Self {
         // TODO: Calculate others
         todo!()
@@ -1638,7 +1642,7 @@ mod accounts {
         assert!(y.is_calc());
         assert!(NetPlantPropertyEquipment.is_calc());
         assert!(!RawMaterials.is_calc());
-        assert!(Pbitda.is_calc());
+        assert!(EBITDA.is_calc());
         assert!(!Salaries.is_calc());
         assert_eq!(DEBIT_TYPE.get(&Inventories), None);
         assert_eq!(DEBIT_TYPE.get(&RawMaterials), Some(&AssetEntry));
@@ -1657,7 +1661,7 @@ mod accounts {
 
     #[test]
     fn account_check() {
-        let ac1 = PeriodReport {
+        let ac1 = FinancialReport {
             date_beg: NDt::from_ymd(2009, 05, 22),
             date_end: NDt::from_ymd(2010, 09, 27),
 
@@ -1666,8 +1670,8 @@ mod accounts {
 
             profit_loss: Some(HashMap::from([
                 (Revenue, -2.58),
-                (Pat, 24.8),
-                (Pbitx, 11.3),
+                (EAT, 24.8),
+                (EBITX, 11.3),
             ])),
             cash_flow: None,
 
@@ -1675,7 +1679,7 @@ mod accounts {
         };
 
         let ac_js = serde_json::to_string(&ac1).unwrap();
-        let acx: PeriodReport = serde_json::from_str(&ac_js).unwrap();
+        let acx: FinancialReport = serde_json::from_str(&ac_js).unwrap();
         // println!("{:?} !true => {}", acx, !true);
 
         let bg = acx.balance_sheet_beg.clone().unwrap();
@@ -1723,7 +1727,7 @@ mod accounts {
             .add(OperatingRevenue, -22.6);
 
         assert!(approx(pl.items.value(OperatingRevenue), 66.05));
-        assert!(approx(pl.items.value(Pat), 0.0));
+        assert!(approx(pl.items.value(EAT), 0.0));
 
         let cf = CashFlow {
             date_beg: NDt::from_ymd(2018, 3, 31),
@@ -1821,7 +1825,7 @@ mod accounts {
         ));
 
         assert!(approx(
-            tx.get_profit_loss((NDt::from_ymd(2019, 3, 1), NDt::from_ymd(2019, 6, 1)), Pat),
+            tx.get_profit_loss((NDt::from_ymd(2019, 3, 1), NDt::from_ymd(2019, 6, 1)), EAT),
             -3698000000.0
         ));
 
