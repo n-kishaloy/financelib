@@ -99,7 +99,7 @@ pub enum BsType {
     RevaluationReserves,
     Reserves,
     RetainedEarnings,
-    AccumulatedOci,
+    AccumulatedOCI,
     MinorityInterests,
     Equity,
     BalanceSheetCheck,
@@ -152,6 +152,15 @@ pub enum PlType {
     ContributionRetainedEarnings,
     GainsLossesForex,
     GainsLossesActurial,
+    GrossSalesPPE,
+    GrossSalesLeaseRentalAssets,
+    GrossSalesIntangibleAssets,
+    AccAmortSalesPPE,
+    AccAmortSalesLeaseRental,
+    AccAmortSalesIntangible,
+    SalesAmountPPE,
+    SalesAmountLeaseRentalAssets,
+    SalesAmountIntangibleAssets,
     GainsLossesSales,
     FvChangeAvlSale,
     OtherDeferredTaxes,
@@ -178,6 +187,7 @@ pub enum CfType {
     CashFlowOperations,
     ChangePPE,
     ChangeReserves,
+    AdjustmentsSalesAssets,
     InvestmentsCapDevp,
     InvestmentsLoans,
     ChangeEquityAssets,
@@ -193,7 +203,7 @@ pub enum CfType {
     CashFlowFinancing,
     NetCashFlow,
     FreeCashFlowFirm,
-    TaxShield,
+    CashFlowTaxShield,
     FreeCashFlowEquity,
     CashFlowDebt,
 }
@@ -232,7 +242,7 @@ pub enum Industry {
 
 use core::{fmt, panic};
 use std::{
-    collections::{btree_set::IntoIter, BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     hash::Hash,
     vec,
 };
@@ -355,7 +365,7 @@ lazy_static! {
                     RevaluationReserves,
                     Reserves,
                     RetainedEarnings,
-                    AccumulatedOci,
+                    AccumulatedOCI,
                     MinorityInterests,
                 ],
                 vec![],
@@ -415,6 +425,24 @@ lazy_static! {
             (vec![NetIncome], vec![Dividends])
         ),
         (
+            GainsLossesSales,
+            (
+                vec![
+                    SalesAmountPPE,
+                    SalesAmountLeaseRentalAssets,
+                    SalesAmountIntangibleAssets,
+                    AccAmortSalesPPE,
+                    AccAmortSalesLeaseRental,
+                    AccAmortSalesIntangible,
+                ],
+                vec![
+                    GrossSalesPPE,
+                    GrossSalesLeaseRentalAssets,
+                    GrossSalesIntangibleAssets,
+                ]
+            )
+        ),
+        (
             OtherComprehensiveIncome,
             (
                 vec![
@@ -450,7 +478,11 @@ lazy_static! {
         (
             CashFlowInvestments,
             (
-                vec![OtherCashFlowInvestments, ChangeReserves],
+                vec![
+                    OtherCashFlowInvestments,
+                    AdjustmentsSalesAssets,
+                    ChangeReserves
+                ],
                 vec![
                     ChangePPE,
                     InvestmentsCapDevp,
@@ -482,14 +514,22 @@ lazy_static! {
         (
             FreeCashFlowEquity,
             (
-                vec![CashFlowOperations, ChangeDebt, ChangeReserves],
+                vec![
+                    CashFlowOperations,
+                    ChangeDebt,
+                    ChangeReserves,
+                    AdjustmentsSalesAssets
+                ],
                 vec![CashFlowInterests, ChangePPE]
             )
         ),
         (CashFlowDebt, (vec![CashFlowInterests], vec![ChangeDebt])),
         (
             FreeCashFlowFirm,
-            (vec![FreeCashFlowEquity, CashFlowDebt], vec![TaxShield])
+            (
+                vec![FreeCashFlowEquity, CashFlowDebt],
+                vec![CashFlowTaxShield]
+            )
         )
     ];
     static ref CASH_FLOW_BALANCE_SHEET: Vec<(CfType, (Vec<BsType>, Vec<BsType>))> = vec![
@@ -559,7 +599,7 @@ lazy_static! {
             )
         ),
         (ChangeRetainedEarnings, (vec![RetainedEarnings,], vec![])),
-        (ChangeAccumulatedOci, (vec![AccumulatedOci,], vec![])),
+        (ChangeAccumulatedOci, (vec![AccumulatedOCI,], vec![])),
         (
             ChangePPE,
             (vec![PlantPropertyEquipment, LeasingRentalAssets,], vec![])
@@ -608,8 +648,29 @@ lazy_static! {
         (CashFlowDividends, (vec![Dividends], vec![])),
         (
             AdjustmentsRetainedEarnings,
-            (vec![InterestExpense, CostDebt, Dividends], vec![])
-        )
+            (
+                vec![
+                    InterestExpense,
+                    CostDebt,
+                    Dividends,
+                    AccAmortSalesPPE,
+                    AccAmortSalesLeaseRental,
+                    AccAmortSalesIntangible
+                ],
+                vec![GainsLossesSales]
+            )
+        ),
+        (
+            AdjustmentsSalesAssets,
+            (
+                vec![GainsLossesSales],
+                vec![
+                    AccAmortSalesPPE,
+                    AccAmortSalesLeaseRental,
+                    AccAmortSalesIntangible
+                ]
+            )
+        ),
     ];
     static ref BALANCE_SHEET_CALC: HashSet<BsType> =
         BALANCE_SHEET_MAP.iter().map(|&(x, _)| x).collect();
@@ -942,7 +1003,7 @@ pub fn calc_cash_flow(
     let rev_tx = revenue_tax * pl.get(&Revenue).unwrap_or(&0.0);
 
     cf.insert(
-        TaxShield,
+        CashFlowTaxShield,
         f64::min(corp_tax * intr, f64::max(0.0, ebit_tx + gr_tx - rev_tx)),
     );
     cf
@@ -1236,14 +1297,6 @@ pub struct Accounts {
 impl Accounts {
     pub fn valid_date(&self, dt: NDt) -> bool {
         self.dates.contains(&dt)
-    }
-
-    pub fn date_iter(&self) -> IntoIter<NDt> {
-        self.dates.clone().into_iter()
-    }
-
-    pub fn date_vec(&self) -> Vec<NDt> {
-        self.date_iter().collect()
     }
 
     pub fn set_dates_from_profit_loss(&mut self) -> &mut Self {
