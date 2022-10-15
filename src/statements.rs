@@ -998,7 +998,14 @@ pub fn calc_cash_flow(
     }
 
     let intr = cf.get(&CashFlowInterests).unwrap_or(&0.0);
-    let ebit_tx = corp_tax * (pl.get(&EBTX).unwrap_or(&0.0) + intr);
+    let ebit_tx = corp_tax
+        * (pl.get(&EBT).unwrap_or(&0.0)
+            + intr
+            + if let Some(x) = pl.get(&TaxDepreciation) {
+                pl.get(&Depreciation).unwrap_or(&0.0) - x
+            } else {
+                0.0
+            });
     let gr_tx = gp_tax * pl.get(&GrossProfit).unwrap_or(&0.0);
     let rev_tx = revenue_tax * pl.get(&Revenue).unwrap_or(&0.0);
 
@@ -1579,6 +1586,32 @@ impl Accounts {
             }
         }
         x
+    }
+
+    pub fn calc_tax(&mut self) -> &mut Self {
+        self.calc_elements();
+        for y in self.profit_loss.clone().keys() {
+            let pl = self.profit_loss.get(y).unwrap();
+            self.put_profit_loss(*y, TaxesCurrent, {
+                let ebt = pl.get(&EBT).unwrap_or(&0.0)
+                    + if let Some(x) = pl.get(&TaxDepreciation) {
+                        pl.get(&Depreciation).unwrap_or(&0.0) - x
+                    } else {
+                        0.0
+                    };
+                let oth = self.others.get(y).unwrap();
+                let (&ct, &gt, &mt) = (
+                    oth.get(&CorporateTaxRate).unwrap_or(&0.0),
+                    oth.get(&GrossProfitTaxRate).unwrap_or(&0.0),
+                    oth.get(&RevenueTaxRate).unwrap_or(&0.0),
+                );
+                f64::max(
+                    ebt * ct + pl.get(&EBITDA).unwrap_or(&0.0) * gt,
+                    pl.get(&Revenue).unwrap_or(&0.0) * mt,
+                )
+            });
+        }
+        self
     }
 
     pub fn to_csv(&self, file: &str) {
