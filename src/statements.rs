@@ -966,6 +966,14 @@ impl FinMaps for PlMap {
     }
 }
 
+pub fn depreciation_tax_adjust(pl: &PlMap) -> f64 {
+    if let Some(x) = pl.get(&TaxDepreciation) {
+        pl.get(&Depreciation).unwrap_or(&0.0) - x
+    } else {
+        0.0
+    }
+}
+
 /**
 derive_cash_flow - Derives the non-calc items of the Cash Flow statement from
 the beginning and ending Balance Sheets given as BsMap and Profit Loss statement
@@ -998,14 +1006,7 @@ pub fn calc_cash_flow(
     }
 
     let intr = cf.get(&CashFlowInterests).unwrap_or(&0.0);
-    let ebit_tx = corp_tax
-        * (pl.get(&EBT).unwrap_or(&0.0)
-            + intr
-            + if let Some(x) = pl.get(&TaxDepreciation) {
-                pl.get(&Depreciation).unwrap_or(&0.0) - x
-            } else {
-                0.0
-            });
+    let ebit_tx = corp_tax * (pl.get(&EBT).unwrap_or(&0.0) + intr + depreciation_tax_adjust(&pl));
     let gr_tx = gp_tax * pl.get(&GrossProfit).unwrap_or(&0.0);
     let rev_tx = revenue_tax * pl.get(&Revenue).unwrap_or(&0.0);
 
@@ -1593,12 +1594,7 @@ impl Accounts {
         for y in self.profit_loss.clone().keys() {
             let pl = self.profit_loss.get(y).unwrap();
             self.put_profit_loss(*y, TaxesCurrent, {
-                let ebt = pl.get(&EBT).unwrap_or(&0.0)
-                    + if let Some(x) = pl.get(&TaxDepreciation) {
-                        pl.get(&Depreciation).unwrap_or(&0.0) - x
-                    } else {
-                        0.0
-                    };
+                let ebt = pl.get(&EBT).unwrap_or(&0.0) + depreciation_tax_adjust(&pl);
                 let oth = self.others.get(y).unwrap();
                 let (&ct, &gt, &mt) = (
                     oth.get(&CorporateTaxRate).unwrap_or(&0.0),
@@ -1852,7 +1848,7 @@ mod accounts {
             82172000000.0
         );
         // println!("{:?}\n\n\n", tx.split_periods());
-        println!("{}", tx);
+        // println!("{}", tx);
         tx.calc_cash_flow();
         // println!("{}", tx);
 
@@ -1969,7 +1965,7 @@ mod accounts {
             2404e+6
         ));
 
-        println!("{}", tx);
+        // println!("{}", tx);
 
         // std::fs::write("./testdocs/tms.ron", ron::to_string(&tx).unwrap()).unwrap();
         // tx.to_csv("./testdocs/tata.csv");
