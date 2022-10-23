@@ -224,22 +224,6 @@ pub enum FinOthersTyp {
     InventoryTurnoverRatio,
 }
 
-/**
-This is for Affiliation to different types of Industry of the economy
-*/
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
-pub enum Industry {
-    General,
-    Automotive,
-    Aerospace,
-    HeavyEngineering,
-    InformationTech,
-    Banking,
-    Metals,
-    Retail,
-    Education,
-}
-
 use core::{fmt, panic};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -252,7 +236,7 @@ use CfType::*;
 use FinOthersTyp::*;
 use PlType::*;
 
-use crate::Currency;
+use crate::{Currency, Period};
 
 lazy_static! {
     static ref BALANCE_SHEET_MAP: Vec<(BsType, (Vec<BsType>, Vec<BsType>))> = vec![
@@ -1097,29 +1081,25 @@ pub struct BalanceSheet {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProfitLoss {
-    pub date_beg: NDt,
-    pub date_end: NDt,
+    pub period: Period,
     pub items: PlMap,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CashFlow {
-    pub date_beg: NDt,
-    pub date_end: NDt,
+    pub period: Period,
     pub items: CfMap,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FinOthers {
-    pub date_beg: NDt,
-    pub date_end: NDt,
+    pub period: Period,
     pub items: FinOthersMap,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FinancialReport {
-    pub date_beg: NDt,
-    pub date_end: NDt,
+    pub period: Period,
 
     pub balance_sheet_beg: Option<BsMap>,
     pub balance_sheet_end: Option<BsMap>,
@@ -1162,16 +1142,16 @@ impl FinancialReport {
             };
 
             let cf_dt = |dt0, dt1, cf: &Option<CashFlow>| match cf {
-                Some(cp) => (cp.date_beg, cp.date_end, Some(cp.items.clone())),
+                Some(cp) => (cp.period.0, cp.period.1, Some(cp.items.clone())),
                 _ => (dt0, dt1, None),
             };
 
             let fo_dt = |dt0, dt1, fth: &Option<FinOthers>| match fth {
-                Some(fo) => (fo.date_beg, fo.date_end, Some(fo.items.clone())),
+                Some(fo) => (fo.period.0, fo.period.1, Some(fo.items.clone())),
                 _ => (dt0, dt1, None),
             };
 
-            let (date_beg, date_end, px) = (pl.date_beg, pl.date_end, pl.items.clone());
+            let ((date_beg, date_end), px) = (pl.period, pl.items.clone());
             let (dbt0, balance_sheet_beg) = bs_dt(date_beg, bs0);
             let (dbt1, balance_sheet_end) = bs_dt(date_end, bs1);
             let (dct0, dct1, cash_flow) = cf_dt(date_beg, date_end, cf);
@@ -1184,8 +1164,7 @@ impl FinancialReport {
                 && date_end == dft1
             {
                 Some(FinancialReport {
-                    date_beg,
-                    date_end,
+                    period: (date_beg, date_end),
                     balance_sheet_beg,
                     balance_sheet_end,
                     profit_loss: Some(px),
@@ -1238,38 +1217,35 @@ impl FinancialReport {
 
     pub fn balance_sheet_beg(&self) -> Option<BalanceSheet> {
         Some(BalanceSheet {
-            date: self.date_beg,
+            date: self.period.0,
             items: (&self.balance_sheet_beg).clone()?,
         })
     }
 
     pub fn balance_sheet_end(&self) -> Option<BalanceSheet> {
         Some(BalanceSheet {
-            date: self.date_end,
+            date: self.period.1,
             items: (&self.balance_sheet_end).clone()?,
         })
     }
 
     pub fn profit_loss(&self) -> Option<ProfitLoss> {
         Some(ProfitLoss {
-            date_beg: self.date_beg,
-            date_end: self.date_end,
+            period: self.period,
             items: (&self.profit_loss).clone()?,
         })
     }
 
     pub fn cash_flow(&self) -> Option<CashFlow> {
         Some(CashFlow {
-            date_beg: self.date_beg,
-            date_end: self.date_end,
+            period: self.period,
             items: (&self.cash_flow).clone()?,
         })
     }
 
     pub fn fin_others(&self) -> Option<FinOthers> {
         Some(FinOthers {
-            date_beg: self.date_beg,
-            date_end: self.date_end,
+            period: self.period,
             items: (&self.others).clone()?,
         })
     }
@@ -1291,15 +1267,32 @@ impl FinancialReport {
     }
 }
 
+pub fn check_dates(dts: &Vec<Period>) -> bool {
+    let (mut dp, dt) = dts[0];
+    if dp > dt {
+        return false;
+    }
+
+    for i in 1..dts.len() {
+        let (d0, d1) = dts[i];
+        if (d0 > d1) || (d0 != dp) {
+            return false;
+        } else {
+            dp = d1;
+        }
+    }
+    true
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Accounts {
     pub currency: Currency,
     pub consolidated: bool,
     pub dates: BTreeSet<NDt>,
     pub balance_sheet: BTreeMap<NDt, BsMap>,
-    pub profit_loss: BTreeMap<(NDt, NDt), PlMap>,
-    pub cash_flow: BTreeMap<(NDt, NDt), CfMap>,
-    pub others: BTreeMap<(NDt, NDt), FinOthersMap>,
+    pub profit_loss: BTreeMap<Period, PlMap>,
+    pub cash_flow: BTreeMap<Period, CfMap>,
+    pub others: BTreeMap<Period, FinOthersMap>,
 }
 
 impl Accounts {
@@ -1319,7 +1312,11 @@ impl Accounts {
         self
     }
 
-    pub fn split_periods(&self) -> (BTreeSet<(NDt, NDt)>, BTreeSet<(NDt, NDt)>) {
+    pub fn check_dates(&self) -> bool {
+        check_dates(&self.profit_loss.keys().map(|&x| x).collect())
+    }
+
+    pub fn split_periods(&self) -> (BTreeSet<Period>, BTreeSet<Period>) {
         let dts = self.profit_loss.keys().into_iter();
         (
             dts.clone()
@@ -1378,8 +1375,7 @@ impl Accounts {
             }
 
             Some(FinancialReport {
-                date_beg: d0,
-                date_end: d1,
+                period: (d0, d1),
                 balance_sheet_beg: get_hashmap(d0, &self.balance_sheet),
                 balance_sheet_end: get_hashmap(d1, &self.balance_sheet),
                 profit_loss: Some(pl.clone()),
@@ -1412,16 +1408,55 @@ impl Accounts {
         self
     }
 
-    pub fn to_account_vec(&self) -> Vec<FinancialReport> {
+    pub fn to_financial_reports(&self) -> Vec<FinancialReport> {
         self.profit_loss
             .keys()
             .map(|&(d0, d1)| self.get_account(d0, d1).unwrap())
             .collect()
     }
 
-    pub fn from_account_vec(&mut self, _ac_vec: &Vec<FinancialReport>) -> &mut Self {
+    pub fn from_financial_reports(&mut self, _ac_vec: &Vec<FinancialReport>) -> &mut Self {
         // TODO: Add implementation
         todo!()
+    }
+
+    pub fn with_cash_flow(&self) -> Option<Self> {
+        let prd: Vec<Period> = self
+            .profit_loss
+            .keys()
+            .filter(|&p| self.cash_flow.contains_key(p))
+            .map(|&x| x)
+            .collect();
+
+        fn build_btree<T: Hash + Copy + Eq>(
+            hm: &BTreeMap<Period, HashMap<T, f64>>,
+            prs: &Vec<Period>,
+        ) -> BTreeMap<Period, HashMap<T, f64>> {
+            prs.iter()
+                .map(|d| (*d, hm.get(&d).unwrap().clone()))
+                .collect()
+        }
+
+        if check_dates(&prd) {
+            Some(Accounts {
+                currency: self.currency,
+                consolidated: self.consolidated,
+                dates: {
+                    let mut dts: BTreeSet<NDt> = BTreeSet::new();
+                    for &(d0, d1) in &prd {
+                        dts.insert(d0);
+                        dts.insert(d1);
+                    }
+                    dts
+                },
+                balance_sheet: self.balance_sheet.clone(),
+                profit_loss: build_btree(&self.profit_loss, &prd),
+                cash_flow: build_btree(&self.cash_flow, &prd),
+                others: build_btree(&self.others, &prd),
+            })
+        } else {
+            None
+        }
     }
 
     pub fn format_table(&self, separator: &str, mult: f64) -> String {
@@ -1648,11 +1683,11 @@ impl Accounts {
         *self.balance_sheet.get(&d).unwrap().get(&ty).unwrap_or(&0.0)
     }
 
-    pub fn get_profit_loss(&self, d: (NDt, NDt), ty: PlType) -> f64 {
+    pub fn get_profit_loss(&self, d: Period, ty: PlType) -> f64 {
         *self.profit_loss.get(&d).unwrap().get(&ty).unwrap_or(&0.0)
     }
 
-    pub fn get_cash_flow(&self, d: (NDt, NDt), ty: CfType) -> f64 {
+    pub fn get_cash_flow(&self, d: Period, ty: CfType) -> f64 {
         *self.cash_flow.get(&d).unwrap().get(&ty).unwrap_or(&0.0)
     }
 
@@ -1665,7 +1700,7 @@ impl Accounts {
         self
     }
 
-    pub fn put_profit_loss(&mut self, d: (NDt, NDt), ty: PlType, val: f64) -> &mut Self {
+    pub fn put_profit_loss(&mut self, d: Period, ty: PlType, val: f64) -> &mut Self {
         if ty.is_calc() {
             panic!("{:?} is a calculated item", ty)
         } else {
@@ -1674,7 +1709,7 @@ impl Accounts {
         self
     }
 
-    pub fn put_cash_flow(&mut self, d: (NDt, NDt), ty: CfType, val: f64) -> &mut Self {
+    pub fn put_cash_flow(&mut self, d: Period, ty: CfType, val: f64) -> &mut Self {
         if ty.is_calc() {
             panic!("{:?} is a calculated item", ty)
         } else {
@@ -1744,19 +1779,15 @@ mod accounts {
     #[test]
     fn account_check() {
         let ac1 = FinancialReport {
-            date_beg: NDt::from_ymd(2009, 05, 22),
-            date_end: NDt::from_ymd(2010, 09, 27),
-
+            period: (NDt::from_ymd(2009, 05, 22), NDt::from_ymd(2010, 09, 27)),
             balance_sheet_beg: Some(HashMap::from([(Cash, 23.5), (Equity, 12.5)])),
             balance_sheet_end: None,
-
             profit_loss: Some(HashMap::from([
                 (Revenue, -2.58),
                 (EAT, 24.8),
                 (EBITX, 11.3),
             ])),
             cash_flow: None,
-
             others: Some(HashMap::new()),
         };
 
@@ -1798,8 +1829,7 @@ mod accounts {
         assert!(approx(bs.items.value(Equity), 0.0));
 
         let mut pl = ProfitLoss {
-            date_beg: NDt::from_ymd(2018, 3, 31),
-            date_end: NDt::from_ymd(2018, 06, 30),
+            period: (NDt::from_ymd(2018, 3, 31), NDt::from_ymd(2018, 06, 30)),
             items: PlMap::from([(OperatingRevenue, 58.35), (OtherExpenses, 41.58)]),
         };
 
@@ -1812,8 +1842,7 @@ mod accounts {
         assert!(approx(pl.items.value(EAT), 0.0));
 
         let cf = CashFlow {
-            date_beg: NDt::from_ymd(2018, 3, 31),
-            date_end: NDt::from_ymd(2018, 06, 30),
+            period: (NDt::from_ymd(2018, 3, 31), NDt::from_ymd(2018, 06, 30)),
             items: CfMap::from([(CashFlowFinancing, 58.35), (NetCashFlow, 41.58)]),
         };
 

@@ -12,22 +12,50 @@ You may see the github repository at <https://github.com/n-kishaloy/financelib>
 */
 
 use crate::statements::*;
-use chrono::{naive::NaiveDate as NDt, Datelike, Duration};
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    hash::Hash,
-    vec,
-};
+use crate::*;
+use chrono::naive::NaiveDate as NDt;
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap};
 
-use BsType::*;
-use CfType::*;
-use FinOthersTyp::*;
-use PlType::*;
+/**
+This is for Affiliation to different types of Industry of the economy
+*/
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
+pub enum Industry {
+    General,
+    Automotive,
+    Aerospace,
+    HeavyEngineering,
+    InformationTech,
+    Banking,
+    Metals,
+    Retail,
+    Education,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompanyReports {
+    param: Param,
+    reports: FinancialReport,
+    affiliation: HashMap<Industry, f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ValuationModel {
+    pub params: BTreeMap<Period, CompanyReports>,
+    pub shareprice: BTreeMap<NDt, f64>,
+}
 
 #[cfg(test)]
 mod valuations {
     use super::*;
     use crate::approx;
+    use std::collections::{BTreeSet, HashMap};
+
+    use chrono::Datelike;
+    use BsType::*;
+    use CfType::*;
+    use PlType::*;
 
     #[test]
     fn trucking() {
@@ -335,6 +363,11 @@ mod valuations {
         };
 
         let solve = |tr_pr0: f64| -> (f64, Accounts) {
+            let _calc_price = |x_tr| {
+                let (xp, _) = npv_trucking(x_tr);
+                xp
+            };
+            // let tr_price = newt_raph(calc_price, tr_pr0, 100.0).unwrap();
             let (_, tx) = npv_trucking(tr_pr0);
             (tr_pr0, tx)
         };
@@ -362,7 +395,7 @@ mod valuations {
             tr_today / ref_km / capacity,
         );
 
-        println!("{disp}");
+        // println!("{disp}");
 
         assert!(approx(0.0, 0.0));
     }

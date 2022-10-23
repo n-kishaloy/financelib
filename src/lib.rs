@@ -24,6 +24,8 @@ use serde::{Deserialize, Serialize};
 use time::util::{days_in_year, is_leap_year};
 use DayCountConvention::*;
 
+pub type Period = (NDt, NDt);
+
 /**
 Converts a date to a f64 float with 1(One) year represented by 1.0
 */
