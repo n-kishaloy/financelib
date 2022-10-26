@@ -18,11 +18,11 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
 /**
-FinType - Defines Trait for all Financial types
+Defines Trait for all Financial types
  */
 pub trait FinType {
     /**
-    is_calc - specifies if a item is calculated or entered
+    Specifies if a item is calculated or entered
 
     e.g. Cash, Depreciation, Revenue etc are entered while items like Current
     Assets, Pat etc are calculated from items which are entered.
@@ -31,7 +31,7 @@ pub trait FinType {
 }
 
 /**
-BsType - Enum for all Balance Sheet types.
+Enum for all Balance Sheet types.
 
 This is primarily used in creating Hashmap for keeping Balance Sheet items.
  */
@@ -106,7 +106,7 @@ pub enum BsType {
 }
 
 /**
-PlType - Enum for all Profit and Loss types.
+Enum for all Profit and Loss types.
 
 This is primarily used in creating Hashmap for keeping Profit and Loss items.
  */
@@ -169,7 +169,7 @@ pub enum PlType {
 }
 
 /**
-CfType - Enum for all Cash Flow types.
+Enum for all Cash Flow types.
 
 This is primarily used in creating Hashmap for keeping Cash Flow items.
  */
@@ -209,7 +209,7 @@ pub enum CfType {
 }
 
 /**
-FinOthersTyp - Enum for all Other types used in Financial statements.
+Enum for all Other types used in Financial statements.
 
 This is primarily used in creating Hashmap for keeping Cash Flow items.
  */
@@ -751,22 +751,22 @@ pub trait FinMaps {
     type Key: Copy + Eq + Hash;
 
     /**
-    calc_elememts - which calculate the calculated items in a statement like
+    Calculate the calculated items in a statement like
     Asset, Current Asset or Pat etc, which are calculated from other entries in
     the HashMaps
     */
     fn calc_elements(&mut self) -> &mut Self;
 
-    /** remove_calc_elem - which removes all calculated elements from a HashMap */
+    /** Removes all calculated elements from a HashMap */
     fn remove_calc_clean(&mut self) -> &mut Self;
 
-    /** check - which checks if the particular Hashmap with the items are correct */
+    /** Checks if the particular Hashmap with the items are correct */
     fn check(&self) -> bool;
 
-    /** common_size - use to create a common size statement */
+    /** Use to create a common size statement */
     fn common_size(&self) -> Self;
 
-    /** clean - removes all extraneous items in a HashMap. */
+    /** Removes all extraneous items in a HashMap. */
     fn clean(&mut self) -> &mut Self;
 
     /**
@@ -873,17 +873,22 @@ impl BsMapTrait for BsMap {
     }
 }
 
+/** Defines transactions on Balance Sheet maps */
 pub trait BsMapTrait {
+    /** Debit of the amount `val` to type `typ` in BsMap */
     fn debit(&mut self, typ: BsType, val: f64) -> &mut Self;
 
+    /** Credit of the amount `val` to type `typ` in BsMap */
     fn credit(&mut self, typ: BsType, val: f64) -> &mut Self {
         BsMapTrait::debit(self, typ, -val)
     }
 
+    /** Debit and Credit amount `val` from BsMap for a complete transaction */
     fn transact(&mut self, (deb, crd, val): (BsType, BsType, f64)) -> &mut Self {
         self.debit(deb, val).credit(crd, val)
     }
 
+    /** Execute a series of transactions given as Vec<(debit, credit, value)> */
     fn transact_series(&mut self, trans: Vec<(BsType, BsType, f64)>) -> &mut Self {
         for x in trans {
             self.transact(x);
@@ -959,7 +964,7 @@ pub fn depreciation_tax_adjust(pl: &PlMap) -> f64 {
 }
 
 /**
-derive_cash_flow - Derives the non-calc items of the Cash Flow statement from
+Derives the non-calc items of the Cash Flow statement from
 the beginning and ending Balance Sheets given as BsMap and Profit Loss statement
 given as PlMap.
 
@@ -1267,6 +1272,7 @@ impl FinancialReport {
     }
 }
 
+/** Check if a Vec of dates in sequence is valid i.e. the last dates of previous and the first date of next are same. */
 pub fn check_dates(dts: &Vec<Period>) -> bool {
     let (mut dp, dt) = dts[0];
     if dp > dt {
@@ -1284,6 +1290,37 @@ pub fn check_dates(dts: &Vec<Period>) -> bool {
     true
 }
 
+pub fn consecutive_periods(prd: &BTreeSet<Period>) -> BTreeSet<Period> {
+    let mut dt_1 = NDt::from_ymd(1000, 1, 1);
+    for &(_, d1) in prd {
+        if d1 > dt_1 {
+            dt_1 = d1;
+        }
+    }
+    let pr_qtr = |y: i32, m: u32| if m <= 3 { (y - 1, m + 9) } else { (y, m - 3) };
+
+    let dt = dt_1.day();
+    let mut bt = BTreeSet::new();
+
+    for _ in 0..100 {
+        let (y1, m1) = (dt_1.year(), dt_1.month());
+        let (yq, mq) = pr_qtr(y1, m1);
+        let dt_q = NDt::from_ymd(yq, mq, dt);
+        let dt_0 = NDt::from_ymd(y1 - 1, m1, dt);
+
+        if prd.contains(&(dt_q, dt_1)) {
+            bt.insert((dt_q, dt_1));
+            dt_1 = dt_q;
+        } else if prd.contains(&(dt_0, dt_1)) {
+            bt.insert((dt_0, dt_1));
+            dt_1 = dt_0;
+        } else {
+            break;
+        }
+    }
+    bt
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Accounts {
     pub currency: Currency,
@@ -1296,6 +1333,7 @@ pub struct Accounts {
 }
 
 impl Accounts {
+    /** finds if a Date exists in the dates in Accounts */
     pub fn valid_date(&self, dt: NDt) -> bool {
         self.dates.contains(&dt)
     }
@@ -1420,42 +1458,48 @@ impl Accounts {
         todo!()
     }
 
-    pub fn with_cash_flow(&self) -> Option<Self> {
-        let prd: Vec<Period> = self
-            .profit_loss
-            .keys()
-            .filter(|&p| self.cash_flow.contains_key(p))
-            .map(|&x| x)
-            .collect();
+    pub fn consecutive_cash_flow(&self) -> Self {
+        self.from_periods(consecutive_periods(&BTreeSet::from_iter(
+            self.cash_flow.keys().map(|&x| x),
+        )))
+    }
 
-        fn build_btree<T: Hash + Copy + Eq>(
-            hm: &BTreeMap<Period, HashMap<T, f64>>,
-            prs: &Vec<Period>,
-        ) -> BTreeMap<Period, HashMap<T, f64>> {
-            prs.iter()
-                .map(|d| (*d, hm.get(&d).unwrap().clone()))
-                .collect()
+    pub fn consecutive_profit_loss(&self) -> Self {
+        self.from_periods(consecutive_periods(&BTreeSet::from_iter(
+            self.profit_loss.keys().map(|&x| x),
+        )))
+    }
+
+    pub fn from_periods(&self, periods: BTreeSet<Period>) -> Self {
+        fn build_btree<K: Hash + Eq + Ord + Copy, T: Hash + Copy + Eq>(
+            hm: &BTreeMap<K, HashMap<T, f64>>,
+            prs: &BTreeSet<K>,
+        ) -> BTreeMap<K, HashMap<T, f64>> {
+            let mut bs = BTreeMap::new();
+            for dt in prs {
+                if let Some(b) = hm.get(&dt) {
+                    bs.insert(*dt, b.clone());
+                }
+            }
+            bs
         }
 
-        if check_dates(&prd) {
-            Some(Accounts {
-                currency: self.currency,
-                consolidated: self.consolidated,
-                dates: {
-                    let mut dts: BTreeSet<NDt> = BTreeSet::new();
-                    for &(d0, d1) in &prd {
-                        dts.insert(d0);
-                        dts.insert(d1);
-                    }
-                    dts
-                },
-                balance_sheet: self.balance_sheet.clone(),
-                profit_loss: build_btree(&self.profit_loss, &prd),
-                cash_flow: build_btree(&self.cash_flow, &prd),
-                others: build_btree(&self.others, &prd),
-            })
-        } else {
-            None
+        let dates = {
+            let mut dts: BTreeSet<NDt> = BTreeSet::new();
+            for &(d0, d1) in &periods {
+                dts.insert(d0);
+                dts.insert(d1);
+            }
+            dts
+        };
+        Accounts {
+            currency: self.currency,
+            consolidated: self.consolidated,
+            dates: dates.clone(),
+            balance_sheet: build_btree(&self.balance_sheet, &dates),
+            profit_loss: build_btree(&self.profit_loss, &periods),
+            cash_flow: build_btree(&self.cash_flow, &periods),
+            others: build_btree(&self.others, &periods),
         }
     }
 
@@ -1995,6 +2039,8 @@ mod accounts {
         ));
 
         // println!("{}", tx);
+        // println!("{}", tx.consecutive_profit_loss());
+        // println!("{}", tx.consecutive_cash_flow());
 
         // std::fs::write("./testdocs/tms.ron", ron::to_string(&tx).unwrap()).unwrap();
         // tx.to_csv("./testdocs/tata.csv");
