@@ -110,6 +110,15 @@ pub fn yearfrac(dt0: NDt, dt1: NDt, basis: DayCountConvention) -> f64 {
     }
 }
 
+/** Calculated yearfrac between a Period
+- (dt0, dt2) - Captures the period for the yearfrac
+
+Uses the default US30360 option
+ */
+pub fn yrfrac((dt0, dt1): Period) -> f64 {
+    yearfrac(dt0, dt1, US30360)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Currency {
     INR,
@@ -140,8 +149,8 @@ pub fn dis_fact(r: f64, n: f64) -> f64 {
 - d0 = begin date
 - d1 = end date
 */
-pub fn xdis_fact(r: f64, d0: NDt, d1: NDt) -> f64 {
-    1.0 / (1.0 + r).powf(yearfrac(d0, d1, US30360))
+pub fn xdis_fact(r: f64, pr: Period) -> f64 {
+    1.0 / (1.0 + r).powf(yrfrac(pr))
 }
 
 /** fwd_dis_fact((r0,t0), (r1,t1)) <br>
@@ -156,16 +165,25 @@ pub fn fwd_dis_fact((r0, t0): (f64, f64), (r1, t1): (f64, f64)) -> f64 {
 
 /** PV of a Future cash flow
 - fv = Future cash flow
-- r  = rate of return
+- r  = Effective rate of return
 - n  = number of periods
 */
 pub fn pv(fv: f64, r: f64, n: f64) -> f64 {
     fv / (1.0 + r).powf(n)
 }
 
+/** PV of a Future cash flow
+- fv = Future cash flow
+- r  = Effective rate of return
+- pr = Period of discounting
+*/
+pub fn xpv(fv: f64, r: f64, pr: Period) -> f64 {
+    fv / (1.0 + r).powf(yrfrac(pr))
+}
+
 /** PV of a Future cash flow with multiple compounding per period
 - fv = Future cash flow
-- r  = rate of return
+- r  = Nominal rate of return
 - n  = number of periods
 - m  = number of compounding per period
 */
@@ -175,7 +193,7 @@ pub fn pvm(fv: f64, r: f64, n: f64, m: f64) -> f64 {
 
 /** PV of continuous expontial growth
 - fv = FV
-- r  = rate of return in exponential term
+- r  = Exponential rate of return
 - n  = number of periods
 */
 pub fn pvc(fv: f64, r: f64, n: f64) -> f64 {
@@ -184,16 +202,25 @@ pub fn pvc(fv: f64, r: f64, n: f64) -> f64 {
 
 /** FV of a Present cash flow
 - pv = Present cash flow
-- r  = rate of return
+- r  = Effective rate of return
 - n  = number of periods
 */
 pub fn fv(pv: f64, r: f64, n: f64) -> f64 {
     pv * (1.0 + r).powf(n)
 }
 
+/** FV of a Future cash flow
+- pv = Present cash flow
+- r  = Effective rate of return
+- pr = Period of discounting
+*/
+pub fn xfv(pv: f64, r: f64, pr: Period) -> f64 {
+    pv * (1.0 + r).powf(yrfrac(pr))
+}
+
 /** FV of a Future cash flow with multiple compounding per period
 - pv = Present cash flow
-- r  = rate of return
+- r  = Nominal rate of return
 - n  = number of periods
 - m  = number of compounding per period
 */
@@ -203,7 +230,7 @@ pub fn fvm(pv: f64, r: f64, n: f64, m: f64) -> f64 {
 
 /** FV of continuous expontial growth
 - pv = PV
-- r  = rate of return in exponential term
+- r  = Exponential rate of return in exponential term
 - n  = number of periods
 */
 pub fn fvc(pv: f64, r: f64, n: f64) -> f64 {
@@ -356,7 +383,10 @@ mod base_fn {
         assert_eq!(dis_fact_annual(0.07), 0.9345794392523364);
         assert_eq!(dis_fact(0.09, 3.0), 0.7721834800610642);
         assert_eq!(
-            xdis_fact(0.09, NDt::from_ymd(2015, 3, 15), NDt::from_ymd(2018, 10, 8)),
+            xdis_fact(
+                0.09,
+                (NDt::from_ymd(2015, 3, 15), NDt::from_ymd(2018, 10, 8))
+            ),
             0.7355566392384189
         );
         assert_eq!(fwd_dis_fact((0.07, 1.0), (0.09, 3.0)), 0.8262363236653387);
@@ -468,6 +498,30 @@ mod base_fn {
         assert_eq!(fvc(10_000., 0.08, 2.0), 11_735.108709918102);
         assert_eq!(pv_annuity(7.33764573879378, 0.08, 30.0, 12.0), 1000.0);
         assert_eq!(pmt(1000.0, 0.08, 30.0, 12.0), 7.33764573879378);
+        assert!(approx(
+            xpv(
+                5.638,
+                0.08,
+                (NDt::from_ymd(2020, 2, 29), NDt::from_ymd(2024, 2, 28))
+            ),
+            pv(5.638, 0.08, 3.9944444444444400000)
+        ));
+        assert!(approx(
+            xfv(
+                5.638,
+                0.08,
+                (NDt::from_ymd(2020, 2, 29), NDt::from_ymd(2024, 2, 28))
+            ),
+            fv(5.638, 0.08, 3.9944444444444400000)
+        ));
+        assert!(approx(
+            xfv(
+                5.638,
+                0.08,
+                (NDt::from_ymd(2020, 2, 29), NDt::from_ymd(2024, 2, 28))
+            ),
+            pv(5.638, 0.08, -3.9944444444444400000)
+        ));
     }
 
     #[test]

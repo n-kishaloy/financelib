@@ -374,6 +374,8 @@ mod valuations {
 
         let (tr_pr, tx) = solve(600_000.0);
 
+        let tx = tx.consecutive_cash_flow();
+
         disp.push_str(&format!("\n\n``` \n{tx}\n```\n\n"));
 
         disp.push_str("## Final optimized solutions\n\n");
@@ -395,7 +397,7 @@ mod valuations {
             tr_today / ref_km / capacity,
         );
 
-        // println!("{disp}");
+        println!("{disp}");
 
         assert!(approx(0.0, 0.0));
     }
