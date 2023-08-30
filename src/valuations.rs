@@ -69,8 +69,8 @@ mod valuations {
 
         let mut disp = format!("# TRUCKING ANALYSIS\n\n");
 
-        let start_dt = NDt::from_ymd(2022, 3, 16);
-        let valuation_dt = NDt::from_ymd(2022, 10, 9);
+        let start_dt = NDt::from_ymd_opt(2022, 3, 16).unwrap();
+        let valuation_dt = NDt::from_ymd_opt(2022, 10, 9).unwrap();
 
         let (infl_fuel, infl_revenue, infl_salary, infl_other) = (0.18, 0.18, 0.15, 0.18);
 
@@ -153,7 +153,7 @@ mod valuations {
             (infl_salary, trip_allow * fst_yr_avg(infl_salary)),
         ];
 
-        let years = |yrs: i32| NDt::from_ymd(yrs + yr, mt, dt);
+        let years = |yrs: i32| NDt::from_ymd_opt(yrs + yr, mt, dt).unwrap();
 
         disp.push_str(&format!("Opex expenses @ 1 year {:?}", opex01));
 

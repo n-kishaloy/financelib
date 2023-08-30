@@ -1291,7 +1291,7 @@ pub fn check_dates(dts: &Vec<Period>) -> bool {
 }
 
 pub fn consecutive_periods(prd: &BTreeSet<Period>) -> BTreeSet<Period> {
-    let mut dt_1 = NDt::from_ymd(1000, 1, 1);
+    let mut dt_1 = NDt::from_ymd_opt(1000, 1, 1).unwrap();
     for &(_, d1) in prd {
         if d1 > dt_1 {
             dt_1 = d1;
@@ -1305,8 +1305,8 @@ pub fn consecutive_periods(prd: &BTreeSet<Period>) -> BTreeSet<Period> {
     for _ in 0..100 {
         let (y1, m1) = (dt_1.year(), dt_1.month());
         let (yq, mq) = pr_qtr(y1, m1);
-        let dt_q = NDt::from_ymd(yq, mq, dt);
-        let dt_0 = NDt::from_ymd(y1 - 1, m1, dt);
+        let dt_q = NDt::from_ymd_opt(yq, mq, dt).unwrap();
+        let dt_0 = NDt::from_ymd_opt(y1 - 1, m1, dt).unwrap();
 
         if prd.contains(&(dt_q, dt_1)) {
             bt.insert((dt_q, dt_1));
@@ -1823,7 +1823,10 @@ mod accounts {
     #[test]
     fn account_check() {
         let ac1 = FinancialReport {
-            period: (NDt::from_ymd(2009, 05, 22), NDt::from_ymd(2010, 09, 27)),
+            period: (
+                NDt::from_ymd_opt(2009, 05, 22).unwrap(),
+                NDt::from_ymd_opt(2010, 09, 27).unwrap(),
+            ),
             balance_sheet_beg: Some(HashMap::from([(Cash, 23.5), (Equity, 12.5)])),
             balance_sheet_end: None,
             profit_loss: Some(HashMap::from([
@@ -1850,7 +1853,7 @@ mod accounts {
         ));
 
         let mut bs = BalanceSheet {
-            date: NDt::from_ymd(2018, 3, 31),
+            date: NDt::from_ymd_opt(2018, 3, 31).unwrap(),
             items: BsMap::from([(Cash, 30.45), (CurrentReceivables, 80.56)]),
         };
 
@@ -1863,7 +1866,7 @@ mod accounts {
             .add(RawMaterials, 12.13)
             .upsert(CurrentLoans, 22.86);
 
-        bs.date = NDt::from_ymd(2018, 3, 30);
+        bs.date = NDt::from_ymd_opt(2018, 3, 30).unwrap();
 
         assert!(approx(bs.items.value(Cash), 39.68));
         assert!(approx(bs.items.value(RawMaterials), 99.63));
@@ -1873,7 +1876,10 @@ mod accounts {
         assert!(approx(bs.items.value(Equity), 0.0));
 
         let mut pl = ProfitLoss {
-            period: (NDt::from_ymd(2018, 3, 31), NDt::from_ymd(2018, 06, 30)),
+            period: (
+                NDt::from_ymd_opt(2018, 3, 31).unwrap(),
+                NDt::from_ymd_opt(2018, 06, 30).unwrap(),
+            ),
             items: PlMap::from([(OperatingRevenue, 58.35), (OtherExpenses, 41.58)]),
         };
 
@@ -1886,7 +1892,10 @@ mod accounts {
         assert!(approx(pl.items.value(EAT), 0.0));
 
         let cf = CashFlow {
-            period: (NDt::from_ymd(2018, 3, 31), NDt::from_ymd(2018, 06, 30)),
+            period: (
+                NDt::from_ymd_opt(2018, 3, 31).unwrap(),
+                NDt::from_ymd_opt(2018, 06, 30).unwrap(),
+            ),
             items: CfMap::from([(CashFlowFinancing, 58.35), (NetCashFlow, 41.58)]),
         };
 
@@ -1906,18 +1915,24 @@ mod accounts {
         tx.set_dates_from_profit_loss().remove_calc_clean();
 
         assert_eq!(
-            tx.get_account(NDt::from_ymd(2018, 6, 1), NDt::from_ymd(2018, 9, 1))
-                .unwrap()
-                .balance_sheet_beg,
+            tx.get_account(
+                NDt::from_ymd_opt(2018, 6, 1).unwrap(),
+                NDt::from_ymd_opt(2018, 9, 1).unwrap()
+            )
+            .unwrap()
+            .balance_sheet_beg,
             None
         );
 
         tx.calc_elements().set_tax_rates(0.1, 0.02, 0.005);
         assert_eq!(
-            (tx.get_account(NDt::from_ymd(2018, 3, 1), NDt::from_ymd(2019, 3, 1))
-                .unwrap()
-                .balance_sheet_beg
-                .unwrap())[&Inventories],
+            (tx.get_account(
+                NDt::from_ymd_opt(2018, 3, 1).unwrap(),
+                NDt::from_ymd_opt(2019, 3, 1).unwrap()
+            )
+            .unwrap()
+            .balance_sheet_beg
+            .unwrap())[&Inventories],
             82172000000.0
         );
         // println!("{:?}\n\n\n", tx.split_periods());
@@ -1927,7 +1942,10 @@ mod accounts {
 
         assert!(approx(
             tx.get_cash_flow(
-                (NDt::from_ymd(2013, 3, 1), NDt::from_ymd(2014, 03, 1)),
+                (
+                    NDt::from_ymd_opt(2013, 3, 1).unwrap(),
+                    NDt::from_ymd_opt(2014, 03, 1).unwrap()
+                ),
                 NetCashFlow
             ),
             8599e+6
@@ -1937,75 +1955,109 @@ mod accounts {
         // This fails as CurrentAssets is a calculated item
 
         assert!(approx(
-            tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables),
+            tx.get_balance_sheet(NDt::from_ymd_opt(2012, 3, 1).unwrap(), CurrentReceivables),
             8237000000.0
         ));
 
-        tx.put_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables, 512_000_000.0)
-            .put_balance_sheet(NDt::from_ymd(2013, 3, 1), FinishedGoods, 256_000_000.0)
-            .put_balance_sheet(NDt::from_ymd(2013, 3, 1), RawMaterials, 600_000_000.0);
+        tx.put_balance_sheet(
+            NDt::from_ymd_opt(2012, 3, 1).unwrap(),
+            CurrentReceivables,
+            512_000_000.0,
+        )
+        .put_balance_sheet(
+            NDt::from_ymd_opt(2013, 3, 1).unwrap(),
+            FinishedGoods,
+            256_000_000.0,
+        )
+        .put_balance_sheet(
+            NDt::from_ymd_opt(2013, 3, 1).unwrap(),
+            RawMaterials,
+            600_000_000.0,
+        );
 
         assert!(approx(
-            tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables),
+            tx.get_balance_sheet(NDt::from_ymd_opt(2012, 3, 1).unwrap(), CurrentReceivables),
             512000000.0
         ));
 
         assert!(approx(
-            tx.get_balance_sheet(NDt::from_ymd(2013, 3, 1), RawMaterials),
+            tx.get_balance_sheet(NDt::from_ymd_opt(2013, 3, 1).unwrap(), RawMaterials),
             600000000.0
         ));
 
-        tx.put_balance_sheet(NDt::from_ymd(2013, 3, 1), RawMaterials, 0.0);
+        tx.put_balance_sheet(NDt::from_ymd_opt(2013, 3, 1).unwrap(), RawMaterials, 0.0);
 
         tx.put_balance_sheet(
-            NDt::from_ymd(2012, 3, 1),
+            NDt::from_ymd_opt(2012, 3, 1).unwrap(),
             CurrentReceivables,
             8237_000_000.0,
         )
-        .put_balance_sheet(NDt::from_ymd(2013, 3, 1), FinishedGoods, 21037_000_000.0);
+        .put_balance_sheet(
+            NDt::from_ymd_opt(2013, 3, 1).unwrap(),
+            FinishedGoods,
+            21037_000_000.0,
+        );
 
         assert!(approx(
-            tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), CurrentReceivables),
+            tx.get_balance_sheet(NDt::from_ymd_opt(2012, 3, 1).unwrap(), CurrentReceivables),
             8237000000.0
         ));
 
         assert!(approx(
-            tx.get_balance_sheet(NDt::from_ymd(2013, 3, 1), FinishedGoods),
+            tx.get_balance_sheet(NDt::from_ymd_opt(2013, 3, 1).unwrap(), FinishedGoods),
             21037000000.0
         ));
 
         assert!(approx(
-            tx.get_balance_sheet(NDt::from_ymd(2012, 3, 1), Assets),
+            tx.get_balance_sheet(NDt::from_ymd_opt(2012, 3, 1).unwrap(), Assets),
             142767000000.0
         ));
 
         assert!(approx(
-            tx.get_profit_loss((NDt::from_ymd(2019, 3, 1), NDt::from_ymd(2019, 6, 1)), EAT),
+            tx.get_profit_loss(
+                (
+                    NDt::from_ymd_opt(2019, 3, 1).unwrap(),
+                    NDt::from_ymd_opt(2019, 6, 1).unwrap()
+                ),
+                EAT
+            ),
             -3698000000.0
         ));
 
         assert!(approx(
             tx.get_cash_flow(
-                (NDt::from_ymd(2019, 3, 1), NDt::from_ymd(2020, 3, 1)),
+                (
+                    NDt::from_ymd_opt(2019, 3, 1).unwrap(),
+                    NDt::from_ymd_opt(2020, 3, 1).unwrap()
+                ),
                 CashFlowOperations
             ),
             26276000000.0
         ));
 
         tx.put_profit_loss(
-            (NDt::from_ymd(2012, 3, 1), NDt::from_ymd(2013, 3, 1)),
+            (
+                NDt::from_ymd_opt(2012, 3, 1).unwrap(),
+                NDt::from_ymd_opt(2013, 3, 1).unwrap(),
+            ),
             InterestExpense,
             13560e+6,
         )
         .put_cash_flow(
-            (NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1)),
+            (
+                NDt::from_ymd_opt(2011, 3, 1).unwrap(),
+                NDt::from_ymd_opt(2012, 3, 1).unwrap(),
+            ),
             AdjustmentsRetainedEarnings,
             22982e+6,
         );
 
         assert!(approx(
             tx.get_profit_loss(
-                (NDt::from_ymd(2012, 3, 1), NDt::from_ymd(2013, 3, 1)),
+                (
+                    NDt::from_ymd_opt(2012, 3, 1).unwrap(),
+                    NDt::from_ymd_opt(2013, 3, 1).unwrap()
+                ),
                 InterestExpense
             ),
             13560e+6
@@ -2013,26 +2065,38 @@ mod accounts {
 
         assert!(approx(
             tx.get_cash_flow(
-                (NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1)),
+                (
+                    NDt::from_ymd_opt(2011, 3, 1).unwrap(),
+                    NDt::from_ymd_opt(2012, 3, 1).unwrap()
+                ),
                 AdjustmentsRetainedEarnings
             ),
             22982e+6
         ));
 
         tx.put_profit_loss(
-            (NDt::from_ymd(2012, 3, 1), NDt::from_ymd(2013, 3, 1)),
+            (
+                NDt::from_ymd_opt(2012, 3, 1).unwrap(),
+                NDt::from_ymd_opt(2013, 3, 1).unwrap(),
+            ),
             InterestExpense,
             3560e+6,
         )
         .put_cash_flow(
-            (NDt::from_ymd(2011, 3, 1), NDt::from_ymd(2012, 3, 1)),
+            (
+                NDt::from_ymd_opt(2011, 3, 1).unwrap(),
+                NDt::from_ymd_opt(2012, 3, 1).unwrap(),
+            ),
             AdjustmentsRetainedEarnings,
             2982e+6,
         );
 
         assert!(approx(
             tx.get_cash_flow(
-                (NDt::from_ymd(2014, 3, 1), NDt::from_ymd(2015, 3, 1)),
+                (
+                    NDt::from_ymd_opt(2014, 3, 1).unwrap(),
+                    NDt::from_ymd_opt(2015, 3, 1).unwrap()
+                ),
                 NetCashFlow
             ),
             2404e+6

@@ -40,7 +40,7 @@ Converts a float to a NaiveDate with 1(One) year represented by 1.0
 pub fn date_from_float(yr: f64) -> NDt {
     let y = (yr - 0.00274).floor();
     let yp = y as i32;
-    NDt::from_yo(yp, ((yr - y) * days_in_year(yp) as f64).round() as u32)
+    NDt::from_yo_opt(yp, ((yr - y) * days_in_year(yp) as f64).round() as u32).unwrap()
 }
 
 /**
@@ -127,6 +127,8 @@ pub enum Currency {
     EUR,
     GBP,
     CNY,
+    MZN,
+    ZAR,
 }
 
 /** Discount factor for 1 period = 1/(1+r)
@@ -385,7 +387,10 @@ mod base_fn {
         assert_eq!(
             xdis_fact(
                 0.09,
-                (NDt::from_ymd(2015, 3, 15), NDt::from_ymd(2018, 10, 8))
+                (
+                    NDt::from_ymd_opt(2015, 3, 15).unwrap(),
+                    NDt::from_ymd_opt(2018, 10, 8).unwrap()
+                )
             ),
             0.7355566392384189
         );
@@ -395,13 +400,34 @@ mod base_fn {
     #[test]
     fn yearfrac_calc() {
         let dts = vec![
-            (&NDt::from_ymd(2018, 2, 5), &NDt::from_ymd(2023, 5, 14)),
-            (&NDt::from_ymd(2020, 2, 29), &NDt::from_ymd(2024, 2, 28)),
-            (&NDt::from_ymd(2015, 8, 30), &NDt::from_ymd(2010, 3, 31)),
-            (&NDt::from_ymd(2016, 2, 28), &NDt::from_ymd(2016, 10, 30)),
-            (&NDt::from_ymd(2014, 1, 31), &NDt::from_ymd(2014, 8, 31)),
-            (&NDt::from_ymd(2014, 2, 28), &NDt::from_ymd(2014, 9, 30)),
-            (&NDt::from_ymd(2016, 2, 29), &NDt::from_ymd(2016, 6, 15)),
+            (
+                &NDt::from_ymd_opt(2018, 2, 5).unwrap(),
+                &NDt::from_ymd_opt(2023, 5, 14).unwrap(),
+            ),
+            (
+                &NDt::from_ymd_opt(2020, 2, 29).unwrap(),
+                &NDt::from_ymd_opt(2024, 2, 28).unwrap(),
+            ),
+            (
+                &NDt::from_ymd_opt(2015, 8, 30).unwrap(),
+                &NDt::from_ymd_opt(2010, 3, 31).unwrap(),
+            ),
+            (
+                &NDt::from_ymd_opt(2016, 2, 28).unwrap(),
+                &NDt::from_ymd_opt(2016, 10, 30).unwrap(),
+            ),
+            (
+                &NDt::from_ymd_opt(2014, 1, 31).unwrap(),
+                &NDt::from_ymd_opt(2014, 8, 31).unwrap(),
+            ),
+            (
+                &NDt::from_ymd_opt(2014, 2, 28).unwrap(),
+                &NDt::from_ymd_opt(2014, 9, 30).unwrap(),
+            ),
+            (
+                &NDt::from_ymd_opt(2016, 2, 29).unwrap(),
+                &NDt::from_ymd_opt(2016, 6, 15).unwrap(),
+            ),
         ]
         .iter()
         .map(|(&dt0, &dt1)| {
@@ -502,7 +528,10 @@ mod base_fn {
             xpv(
                 5.638,
                 0.08,
-                (NDt::from_ymd(2020, 2, 29), NDt::from_ymd(2024, 2, 28))
+                (
+                    NDt::from_ymd_opt(2020, 2, 29).unwrap(),
+                    NDt::from_ymd_opt(2024, 2, 28).unwrap()
+                )
             ),
             pv(5.638, 0.08, 3.9944444444444400000)
         ));
@@ -510,7 +539,10 @@ mod base_fn {
             xfv(
                 5.638,
                 0.08,
-                (NDt::from_ymd(2020, 2, 29), NDt::from_ymd(2024, 2, 28))
+                (
+                    NDt::from_ymd_opt(2020, 2, 29).unwrap(),
+                    NDt::from_ymd_opt(2024, 2, 28).unwrap()
+                )
             ),
             fv(5.638, 0.08, 3.9944444444444400000)
         ));
@@ -518,7 +550,10 @@ mod base_fn {
             xfv(
                 5.638,
                 0.08,
-                (NDt::from_ymd(2020, 2, 29), NDt::from_ymd(2024, 2, 28))
+                (
+                    NDt::from_ymd_opt(2020, 2, 29).unwrap(),
+                    NDt::from_ymd_opt(2024, 2, 28).unwrap()
+                )
             ),
             pv(5.638, 0.08, -3.9944444444444400000)
         ));
@@ -569,25 +604,25 @@ mod base_fn {
             xnpv(
                 0.08,
                 &vec![
-                    NDt::from_ymd(2012, 2, 25),
-                    NDt::from_ymd(2012, 6, 28),
-                    NDt::from_ymd(2013, 2, 15),
-                    NDt::from_ymd(2014, 9, 18),
-                    NDt::from_ymd(2015, 2, 20)
+                    NDt::from_ymd_opt(2012, 2, 25).unwrap(),
+                    NDt::from_ymd_opt(2012, 6, 28).unwrap(),
+                    NDt::from_ymd_opt(2013, 2, 15).unwrap(),
+                    NDt::from_ymd_opt(2014, 9, 18).unwrap(),
+                    NDt::from_ymd_opt(2015, 2, 20).unwrap(),
                 ],
                 &vec![-15.0, 5.0, 25.0, -10.0, 50.0],
-                NDt::from_ymd(2012, 1, 10)
+                NDt::from_ymd_opt(2012, 1, 10).unwrap()
             ),
             44.165773653310936
         );
         assert_eq!(
             xirr(
                 &vec![
-                    NDt::from_ymd(2012, 2, 25),
-                    NDt::from_ymd(2012, 6, 28),
-                    NDt::from_ymd(2013, 2, 15),
-                    NDt::from_ymd(2014, 9, 18),
-                    NDt::from_ymd(2015, 2, 20)
+                    NDt::from_ymd_opt(2012, 2, 25).unwrap(),
+                    NDt::from_ymd_opt(2012, 6, 28).unwrap(),
+                    NDt::from_ymd_opt(2013, 2, 15).unwrap(),
+                    NDt::from_ymd_opt(2014, 9, 18).unwrap(),
+                    NDt::from_ymd_opt(2015, 2, 20).unwrap(),
                 ],
                 &vec![-115.0, 5.0, 25.0, -10.0, 200.0]
             ),
