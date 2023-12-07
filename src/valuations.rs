@@ -1,7 +1,7 @@
 /*!
 Implement Derivatives modules for the financelib library
 
-Module      : financelib::vakuations <br>
+Module      : financelib::valuations <br>
 Copyright   : (c) 2022 Kishaloy Neogi <br>
 License     : MIT <br>
 Maintainer  : Kishaloy Neogi <br>
