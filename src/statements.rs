@@ -801,8 +801,8 @@ pub trait FinMaps {
 }
 
 fn calc_elem<T: Hash + Ord + Copy>(hm: &HashMap<T, f64>, x: &Vec<T>, y: &Vec<T>) -> f64 {
-    x.iter().map(|k| *hm.get(k).unwrap_or(&0.0)).sum::<f64>()
-        - y.iter().map(|k| *hm.get(k).unwrap_or(&0.0)).sum::<f64>()
+    let cal = |t: &Vec<T>| t.iter().map(|k| *hm.get(k).unwrap_or(&0.0)).sum::<f64>();
+    cal(x) - cal(y)
 }
 
 impl FinMaps for BsMap {
