@@ -67,9 +67,9 @@ impl RateCurve {
     pub fn pv(&self, c: f64, tim: f64) -> f64 {
         let rate = self.rate_estim(tim);
         match self {
-            Self::NominalRateCurve { rate: _, freq: f } => crate::pvm(c, rate, tim, *f),
-            Self::EffectiveRateCurve { rate: _, freq: _ } => crate::pv(c, rate, tim),
-            Self::ExponentialRateCurve { rate: _, freq: _ } => crate::pvc(c, rate, tim),
+            Self::NominalRateCurve { rate: _, freq: f } => crate::pvm(rate, tim, *f, c),
+            Self::EffectiveRateCurve { rate: _, freq: _ } => crate::pv(rate, tim, c),
+            Self::ExponentialRateCurve { rate: _, freq: _ } => crate::pvc(rate, tim, c),
         }
     }
 

@@ -38,8 +38,13 @@ impl CouponBond {
     - rate  = Discount rate given as Nominal rate
      */
     pub fn price(&self, rate: f64) -> f64 {
-        crate::pv_annuity(self.c / self.freq * self.par, rate, self.t_life, self.freq)
-            + crate::pvm(self.par, rate, self.t_life, self.freq)
+        crate::pv_annuity(
+            rate,
+            self.t_life,
+            self.freq,
+            -self.c / self.freq * self.par,
+            0.0,
+        ) + crate::pvm(rate, self.t_life, self.freq, self.par)
     }
 
     /**
@@ -123,15 +128,16 @@ impl FloatingRateNotes {
      */
     pub fn price(&self, index_rate: f64, discount_margin: f64) -> f64 {
         crate::pv_annuity(
-            (self.quoted_margin + index_rate) * self.par / self.freq,
             index_rate + discount_margin,
             self.t_life,
             self.freq,
+            -(self.quoted_margin + index_rate) * self.par / self.freq,
+            0.0,
         ) + crate::pvm(
-            self.par,
             index_rate + discount_margin,
             self.t_life,
             self.freq,
+            self.par,
         )
     }
 

@@ -170,7 +170,7 @@ pub fn fwd_dis_fact((r0, t0): (f64, f64), (r1, t1): (f64, f64)) -> f64 {
 - r  = Effective rate of return
 - n  = number of periods
 */
-pub fn pv(fv: f64, r: f64, n: f64) -> f64 {
+pub fn pv(r: f64, n: f64, fv: f64) -> f64 {
     fv / (1.0 + r).powf(n)
 }
 
@@ -179,7 +179,7 @@ pub fn pv(fv: f64, r: f64, n: f64) -> f64 {
 - r  = Effective rate of return
 - pr = Period of discounting
 */
-pub fn xpv(fv: f64, r: f64, pr: Period) -> f64 {
+pub fn xpv(r: f64, pr: Period, fv: f64) -> f64 {
     fv / (1.0 + r).powf(yrfrac(pr))
 }
 
@@ -189,8 +189,8 @@ pub fn xpv(fv: f64, r: f64, pr: Period) -> f64 {
 - n  = number of periods
 - m  = number of compounding per period
 */
-pub fn pvm(fv: f64, r: f64, n: f64, m: f64) -> f64 {
-    pv(fv, r / m, n * m)
+pub fn pvm(r: f64, n: f64, m: f64, fv: f64) -> f64 {
+    pv(r / m, n * m, fv)
 }
 
 /** PV of continuous expontial growth
@@ -198,7 +198,7 @@ pub fn pvm(fv: f64, r: f64, n: f64, m: f64) -> f64 {
 - r  = Exponential rate of return
 - n  = number of periods
 */
-pub fn pvc(fv: f64, r: f64, n: f64) -> f64 {
+pub fn pvc(r: f64, n: f64, fv: f64) -> f64 {
     fv / (r * n).exp()
 }
 
@@ -207,7 +207,7 @@ pub fn pvc(fv: f64, r: f64, n: f64) -> f64 {
 - r  = Effective rate of return
 - n  = number of periods
 */
-pub fn fv(pv: f64, r: f64, n: f64) -> f64 {
+pub fn fv(r: f64, n: f64, pv: f64) -> f64 {
     pv * (1.0 + r).powf(n)
 }
 
@@ -216,7 +216,7 @@ pub fn fv(pv: f64, r: f64, n: f64) -> f64 {
 - r  = Effective rate of return
 - pr = Period of discounting
 */
-pub fn xfv(pv: f64, r: f64, pr: Period) -> f64 {
+pub fn xfv(r: f64, pr: Period, pv: f64) -> f64 {
     pv * (1.0 + r).powf(yrfrac(pr))
 }
 
@@ -226,8 +226,8 @@ pub fn xfv(pv: f64, r: f64, pr: Period) -> f64 {
 - n  = number of periods
 - m  = number of compounding per period
 */
-pub fn fvm(pv: f64, r: f64, n: f64, m: f64) -> f64 {
-    fv(pv, r / m, n * m)
+pub fn fvm(r: f64, n: f64, m: f64, pv: f64) -> f64 {
+    fv(r / m, n * m, pv)
 }
 
 /** FV of continuous expontial growth
@@ -235,7 +235,7 @@ pub fn fvm(pv: f64, r: f64, n: f64, m: f64) -> f64 {
 - r  = Exponential rate of return in exponential term
 - n  = number of periods
 */
-pub fn fvc(pv: f64, r: f64, n: f64) -> f64 {
+pub fn fvc(r: f64, n: f64, pv: f64) -> f64 {
     pv * (r * n).exp()
 }
 
@@ -245,8 +245,9 @@ pub fn fvc(pv: f64, r: f64, n: f64) -> f64 {
 - n   = number of periods (say, years)
 - m   = number of payments per period (say, monthly where `m = 12`)
 */
-pub fn pv_annuity(pmt: f64, r: f64, n: f64, m: f64) -> f64 {
-    pmt / (r / m) * (1.0 - 1.0 / (1.0 + r / m).powf(n * m))
+pub fn pv_annuity(r: f64, n: f64, m: f64, pmt: f64, fv: f64) -> f64 {
+    let rn = (1.0 + r / m).powf(n * m);
+    -pmt / (r / m) * (1.0 - 1.0 / rn) - fv / rn
 }
 
 /** Payment to cover the PV of an Annuity
@@ -255,8 +256,9 @@ pub fn pv_annuity(pmt: f64, r: f64, n: f64, m: f64) -> f64 {
 - n  = number of periods (say, years)
 - m  = number of payments per period (say, monthly where m = 12)
 */
-pub fn pmt(pv: f64, r: f64, n: f64, m: f64) -> f64 {
-    pv * (r / m) / (1.0 - 1.0 / (1.0 + r / m).powf(n * m))
+pub fn pmt(r: f64, n: f64, m: f64, pv: f64, fv: f64) -> f64 {
+    let rn = (1.0 + r / m).powf(n * m);
+    -(pv + fv / rn) * (r / m) / (1.0 - 1.0 / rn)
 }
 
 /** Effective rate of return for multiple compounding per period
@@ -330,7 +332,7 @@ pub fn npv_t0(mut r: f64, tim: &Vec<f64>, cf: &Vec<f64>) -> f64 {
 - cf  = vector of corresponding cash flows
 - t0  = time period at which the NPV is sought. Essentially, NPV(ti - t0)
 */
-pub fn npv(r: f64, tim: &Vec<f64>, cf: &Vec<f64>, t0: f64) -> f64 {
+pub fn npv(r: f64, tim: &Vec<f64>, t0: f64, cf: &Vec<f64>) -> f64 {
     npv_t0(r, tim, cf) * (1.0 + r).powf(t0)
 }
 
@@ -340,9 +342,8 @@ pub fn npv(r: f64, tim: &Vec<f64>, cf: &Vec<f64>, t0: f64) -> f64 {
 - cf  = vector of corresponding cash flows
 - d0  = Date at which the NPV is sought.
 */
-pub fn xnpv(r: f64, dt: &Vec<NDt>, cf: &Vec<f64>, d0: NDt) -> f64 {
-    let tim = dt.iter().map(|&d| yearfrac(d0, d, US30360)).collect();
-    npv_t0(r, &tim, cf)
+pub fn xnpv(r: f64, dt: &Vec<NDt>, d0: NDt, cf: &Vec<f64>) -> f64 {
+    npv_t0(r, &dt.iter().map(|&d| yrfrac((d0, d))).collect(), cf)
 }
 
 /** IRR of cash flow against time given in periods
@@ -358,8 +359,7 @@ pub fn irr(tim: &Vec<f64>, cf: &Vec<f64>) -> Option<f64> {
 - cf  = vector of corresponding cash flows
 */
 pub fn xirr(dt: &Vec<NDt>, cf: &Vec<f64>) -> Option<f64> {
-    let tim = dt.iter().map(|&d| yearfrac(dt[0], d, US30360)).collect();
-    irr(&tim, cf)
+    irr(&dt.iter().map(|&d| yrfrac((dt[0], d))).collect(), cf)
 }
 
 pub fn newt_raph(f: impl Fn(f64) -> f64, mut x: f64, xtol: f64) -> Option<f64> {
@@ -516,46 +516,49 @@ mod base_fn {
 
     #[test]
     fn present_future_value() {
-        assert_eq!(pv(10_000_000.0, 0.09, 5.0), 6_499_313.862983453);
-        assert_eq!(pvm(12_704_891.610953823, 0.06, 4.0, 12.0), 10_000_000.0);
-        assert_eq!(pvc(11_735.108709918102, 0.08, 2.0), 10_000.0);
-        assert_eq!(fv(6_499_313.862983453, 0.09, 5.0), 10_000_000.0);
-        assert_eq!(fvm(10_000_000.0, 0.06, 4.0, 12.0), 12_704_891.610953823);
-        assert_eq!(fvc(10_000., 0.08, 2.0), 11_735.108709918102);
-        assert_eq!(pv_annuity(7.33764573879378, 0.08, 30.0, 12.0), 1000.0);
-        assert_eq!(pmt(1000.0, 0.08, 30.0, 12.0), 7.33764573879378);
+        assert_eq!(pv(0.09, 5.0, 10_000_000.0), 6_499_313.862983453);
+        assert_eq!(pvm(0.06, 4.0, 12.0, 12_704_891.610953823), 10_000_000.0);
+        assert_eq!(pvc(0.08, 2.0, 11_735.108709918102), 10_000.0);
+        assert_eq!(fv(0.09, 5.0, 6_499_313.862983453), 10_000_000.0);
+        assert_eq!(fvm(0.06, 4.0, 12.0, 10_000_000.0), 12_704_891.610953823);
+        assert_eq!(fvc(0.08, 2.0, 10_000.), 11_735.108709918102);
+        assert_eq!(
+            pv_annuity(0.08, 30.0, 12.0, 7.304096785187425, 50.0),
+            -1000.0
+        );
+        assert_eq!(pmt(0.08, 30.0, 12.0, -1000.0, 50.0), 7.304096785187425);
         assert!(approx(
             xpv(
-                5.638,
                 0.08,
                 (
                     NDt::from_ymd_opt(2020, 2, 29).unwrap(),
                     NDt::from_ymd_opt(2024, 2, 28).unwrap()
-                )
+                ),
+                5.638
             ),
-            pv(5.638, 0.08, 3.9944444444444400000)
+            pv(0.08, 3.9944444444444400000, 5.638)
         ));
         assert!(approx(
             xfv(
-                5.638,
                 0.08,
                 (
                     NDt::from_ymd_opt(2020, 2, 29).unwrap(),
                     NDt::from_ymd_opt(2024, 2, 28).unwrap()
-                )
+                ),
+                5.638
             ),
-            fv(5.638, 0.08, 3.9944444444444400000)
+            fv(0.08, 3.9944444444444400000, 5.638)
         ));
         assert!(approx(
             xfv(
-                5.638,
                 0.08,
                 (
                     NDt::from_ymd_opt(2020, 2, 29).unwrap(),
                     NDt::from_ymd_opt(2024, 2, 28).unwrap()
-                )
+                ),
+                5.638
             ),
-            pv(5.638, 0.08, -3.9944444444444400000)
+            pv(0.08, -3.9944444444444400000, 5.638)
         ));
     }
 
@@ -581,8 +584,8 @@ mod base_fn {
             npv(
                 0.08,
                 &vec![0.25, 6.25, 3.5, 4.5, 1.25],
+                -0.45,
                 &vec![-6.25, 1.2, 1.25, 3.6, 2.5],
-                -0.45
             ),
             0.36962283798505946
         );
@@ -610,8 +613,8 @@ mod base_fn {
                     NDt::from_ymd_opt(2014, 9, 18).unwrap(),
                     NDt::from_ymd_opt(2015, 2, 20).unwrap(),
                 ],
+                NDt::from_ymd_opt(2012, 1, 10).unwrap(),
                 &vec![-15.0, 5.0, 25.0, -10.0, 50.0],
-                NDt::from_ymd_opt(2012, 1, 10).unwrap()
             ),
             44.165773653310936
         );
