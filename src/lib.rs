@@ -354,8 +354,8 @@ pub fn irr(tim: &Vec<f64>, cf: &Vec<f64>) -> Option<f64> {
     newt_raph(|r| npv_t0(r, tim, cf), 0.1, 1e-6)
 }
 
-/** IRR of cash flow against time given as NaiveDate
-- tim = vector of time of cash flows given as Float64
+/** XIRR of cash flow against time given as NaiveDate
+- dt  = vector of time of cash flows given as NaiveDate
 - cf  = vector of corresponding cash flows
 */
 pub fn xirr(dt: &Vec<NDt>, cf: &Vec<f64>) -> Option<f64> {
@@ -536,7 +536,7 @@ mod base_fn {
                 ),
                 5.638
             ),
-            pv(0.08, 3.9944444444444400000, 5.638)
+            4.1458705451340800
         ));
         assert!(approx(
             xfv(
@@ -558,7 +558,7 @@ mod base_fn {
                 ),
                 5.638
             ),
-            pv(0.08, -3.9944444444444400000, 5.638)
+            7.6671578752761100
         ));
     }
 
