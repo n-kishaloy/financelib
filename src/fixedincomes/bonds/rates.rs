@@ -41,14 +41,16 @@ impl RateCurve {
      */
     pub fn rate_estim(&self, y: f64) -> f64 {
         fn estima(rx: &Vec<f64>, fq: f64, y: f64) -> f64 {
-            let pt = y * fq;
-            let fl = pt.floor();
-            let f0 = fl as usize - 1;
-            let pf = pt - fl;
+            let proper = |x: f64| -> (usize, f64) {
+                let sl = x.floor();
+                (sl as usize, x - sl)
+            };
+            let (fl, pf) = proper(y * fq);
+            let r0 = rx[fl - 1];
             if pf < 1e-9 {
-                rx[f0]
+                r0
             } else {
-                rx[f0] * (1.0 - pf) + rx[f0 + 1] * pf
+                r0 * (1.0 - pf) + rx[fl] * pf
             }
         }
         match self {
@@ -164,13 +166,13 @@ impl Rates {
                 let mut y = vec![0.0; n];
 
                 y[0] = rt[0];
-                for i in 1..n {
+                (1..n).for_each(|i| {
                     let xm = rt[i] / fq;
                     let sm = (0..i)
                         .map(|k| xm / (1.0 + y[k] / fq).powf((k + 1) as f64))
                         .sum::<f64>();
                     y[i] = (((1.0 + xm) / (1.0 - sm)).powf(1.0 / ((i + 1) as f64)) - 1.0) * fq
-                }
+                });
                 Rates::SpotRates {
                     rate: RateCurve::NominalRateCurve { rate: y, freq: *fq },
                 }
@@ -227,21 +229,19 @@ impl Rates {
     - tenor             = tenor of the forward period
      */
     pub fn forward_rate(&self, forward_period: f64, tenor: f64) -> f64 {
-        match &self {
-            &Self::SpotRates { rate } => {
-                let ft = forward_period + tenor;
-                let f = match rate {
-                    RateCurve::NominalRateCurve { freq, .. } => freq,
-                    _ => unimplemented!(),
-                };
-                (((1.0 + rate.rate_estim(ft) / f).powf(ft * f)
-                    / (1.0 + rate.rate_estim(forward_period) / f).powf(forward_period * f))
-                .powf(1.0 / (tenor * f))
-                    - 1.0)
-                    * f
-            }
-            _ => unimplemented!(),
-        }
+        let &Self::SpotRates { rate } = &self else {
+            unimplemented!()
+        };
+        let ft = forward_period + tenor;
+        let RateCurve::NominalRateCurve { freq: f, .. } = rate else {
+            unimplemented!()
+        };
+        let rtestim = |x| rate.rate_estim(x);
+        (((1.0 + rtestim(ft) / f).powf(ft * f)
+            / (1.0 + rtestim(forward_period) / f).powf(forward_period * f))
+        .powf(1.0 / (tenor * f))
+            - 1.0)
+            * f
     }
 }
 
