@@ -236,9 +236,8 @@ impl Rates {
         let RateCurve::NominalRateCurve { freq: f, .. } = rate else {
             unimplemented!()
         };
-        let rtestim = |x| rate.rate_estim(x);
-        (((1.0 + rtestim(ft) / f).powf(ft * f)
-            / (1.0 + rtestim(forward_period) / f).powf(forward_period * f))
+        (((1.0 + rate.rate_estim(ft) / f).powf(ft * f)
+            / (1.0 + rate.rate_estim(forward_period) / f).powf(forward_period * f))
         .powf(1.0 / (tenor * f))
             - 1.0)
             * f

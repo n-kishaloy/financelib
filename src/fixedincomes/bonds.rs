@@ -74,8 +74,9 @@ impl CouponBond {
      */
     pub fn generate_cashflow(&self) -> Vec<f64> {
         let c = self.par * self.c / self.freq;
-        let mut cb: Vec<f64> = vec![c; (self.freq * self.t_life) as usize];
-        cb[(self.freq * self.t_life) as usize - 1] += self.par;
+        let sz = (self.freq * self.t_life) as usize;
+        let mut cb: Vec<f64> = vec![c; sz];
+        cb[sz - 1] += self.par;
         cb
     }
 

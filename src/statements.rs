@@ -709,20 +709,24 @@ fn debit_mapping(
     calc_neg: BalanceSheetEntry,
 ) {
     let (a, b) = BALANCE_SHEET_HASHMAP[&calc_type];
-    for x in a {
-        if BALANCE_SHEET_CALC.contains(x) {
-            debit_mapping(debit_map, *x, calc_pos, calc_neg)
-        } else {
-            debit_map.insert(*x, calc_pos);
+
+    fn adder(
+        db: &mut HashMap<BsType, BalanceSheetEntry>,
+        v: &Vec<BsType>,
+        cpos: BalanceSheetEntry,
+        cneg: BalanceSheetEntry,
+    ) {
+        for x in v {
+            if BALANCE_SHEET_CALC.contains(x) {
+                debit_mapping(db, *x, cpos, cneg);
+            } else {
+                db.insert(*x, cpos);
+            }
         }
     }
-    for x in b {
-        if BALANCE_SHEET_CALC.contains(x) {
-            debit_mapping(debit_map, *x, calc_neg, calc_pos)
-        } else {
-            debit_map.insert(*x, calc_neg);
-        }
-    }
+
+    adder(debit_map, a, calc_pos, calc_neg);
+    adder(debit_map, b, calc_neg, calc_pos);
 }
 
 impl FinType for BsType {
@@ -1693,6 +1697,10 @@ impl Accounts {
         std::fs::write(file, self.format_table(",", 1.0)).unwrap();
     }
 
+    pub fn from_csv(&mut self, _file: &str) {
+        todo!()
+    }
+
     pub fn set_tax_rates(
         &mut self,
         corp_tax: f64,
@@ -2102,7 +2110,16 @@ mod accounts {
             2404e+6
         ));
 
-        // println!("{}", tx);
+        let ky = DEBIT_TYPE.clone();
+
+        assert_eq!(ky[&InterestPayable], LiabilityEntry);
+        assert_eq!(ky[&OtherTangibleAssets], AssetEntry);
+        assert_eq!(ky[&AccumulatedAmortization], AssetContra);
+        assert_eq!(ky[&CommonStock], EquityEntry);
+        assert_eq!(ky[&DeferredCompensation], LiabilityEntry);
+        assert_eq!(ky[&AccumulatedDepreciation], AssetContra);
+
+        // println!("Hiya 123 {:?}", ky);
         // println!("{}", tx.consecutive_profit_loss());
         // println!("{}", tx.consecutive_cash_flow());
 
