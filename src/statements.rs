@@ -1259,6 +1259,42 @@ impl FinancialReport {
         })
     }
 
+    pub fn current_ratio() -> f64 {
+        todo!()
+    }
+
+    pub fn quick_ratio() -> f64 {
+        todo!()
+    }
+
+    pub fn defensive_interval_ratio() -> f64 {
+        todo!()
+    }
+
+    pub fn days_sales_outstanding() -> f64 {
+        todo!()
+    }
+
+    pub fn days_hand_inventory() -> f64 {
+        todo!()
+    }
+
+    pub fn days_payable() -> f64 {
+        todo!()
+    }
+
+    pub fn cashflow_reinvestment_ratio() -> f64 {
+        todo!()
+    }
+
+    pub fn cashflow_totaldebt_ratio() -> f64 {
+        todo!()
+    }
+
+    pub fn cashflow_interestcoverage() -> f64 {
+        todo!()
+    }
+
     pub fn eps() -> f64 {
         // TODO: Add implementation of EPS
         todo!()

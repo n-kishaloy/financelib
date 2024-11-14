@@ -21,10 +21,36 @@ pub mod valuations;
 
 use chrono::{naive::NaiveDate as NDt, Datelike};
 use serde::{Deserialize, Serialize};
-use time::util::{days_in_year, is_leap_year};
+// use time::util::is_leap_year;
 use DayCountConvention::*;
 
 pub type Period = (NDt, NDt);
+
+/**
+ * Check if Leap year
+ */
+pub fn is_leap_year(yr: i32) -> bool {
+    if yr % 4 == 0 {
+        if yr % 100 == 0 && yr % 400 != 0 {
+            false
+        } else {
+            true
+        }
+    } else {
+        false
+    }
+}
+
+/**
+ * Nos of days in a year
+ */
+pub fn days_in_year(yr: i32) -> i64 {
+    if is_leap_year(yr) {
+        366
+    } else {
+        365
+    }
+}
 
 /**
 Converts a date to a f64 float with 1(One) year represented by 1.0
@@ -442,6 +468,10 @@ mod base_fn {
         .collect::<Vec<_>>();
 
         // println!("{:?}", dts[6]);
+        assert_eq!(is_leap_year(2011), false);
+        assert_eq!(is_leap_year(2016), true);
+        assert_eq!(is_leap_year(1900), false);
+        assert_eq!(is_leap_year(1600), true);
         assert!(
             dts[0]
                 == (
