@@ -29,16 +29,8 @@ pub type Period = (NDt, NDt);
 /**
  * Check if Leap year
  */
-pub fn is_leap_year(yr: i32) -> bool {
-    if yr % 4 == 0 {
-        if yr % 100 == 0 && yr % 400 != 0 {
-            false
-        } else {
-            true
-        }
-    } else {
-        false
-    }
+pub fn is_leap_year(y: i32) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
 }
 
 /**
