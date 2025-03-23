@@ -19,7 +19,7 @@ pub mod fixedincomes;
 pub mod statements;
 pub mod valuations;
 
-use chrono::{naive::NaiveDate as NDt, Datelike};
+use chrono::{Datelike, naive::NaiveDate as NDt};
 use serde::{Deserialize, Serialize};
 // use time::util::is_leap_year;
 use DayCountConvention::*;
@@ -37,11 +37,7 @@ pub fn is_leap_year(y: i32) -> bool {
  * Nos of days in a year
  */
 pub fn days_in_year(yr: i32) -> i64 {
-    if is_leap_year(yr) {
-        366
-    } else {
-        365
-    }
+    if is_leap_year(yr) { 366 } else { 365 }
 }
 
 /**
@@ -334,6 +330,13 @@ pub fn approx(x: f64, y: f64) -> bool {
     mx < 1e-8 || (x - y).abs() / mx < 1e-6
 }
 
+/** Check if a float is zero
+- x = float to be checked
+*/
+pub fn is_zero(x: f64) -> bool {
+    x.abs() < 1e-8
+}
+
 /** NPV of cash flows against time given in periods @ time = 0.0
 - r   = rate of return across the periods
 - tim = vector of time of cash flows given as Float64
@@ -381,13 +384,16 @@ pub fn xirr(dt: &Vec<NDt>, cf: &Vec<f64>) -> Option<f64> {
 }
 
 pub fn newt_raph(f: impl Fn(f64) -> f64, mut x: f64, xtol: f64) -> Option<f64> {
-    let mut dx: f64;
-    let del_x = xtol / 10.0;
+    let dx = xtol / 10.0;
     for _ in 0..100 {
-        dx = f(x);
-        dx = del_x * dx / (f(x + del_x) - dx);
-        x -= dx;
-        if dx.abs() < xtol {
+        let fx = f(x);
+        let df = (f(x + dx) - fx) / dx;
+        if is_zero(df) {
+            return None;
+        }
+        let del_x = fx / df;
+        x -= del_x;
+        if is_zero(del_x) {
             return Some(x);
         }
     }
@@ -419,42 +425,42 @@ mod base_fn {
     fn yearfrac_calc() {
         let dts = vec![
             (
-                &NDt::from_ymd_opt(2018, 2, 5).unwrap(),
-                &NDt::from_ymd_opt(2023, 5, 14).unwrap(),
+                NDt::from_ymd_opt(2018, 2, 5).unwrap(),
+                NDt::from_ymd_opt(2023, 5, 14).unwrap(),
             ),
             (
-                &NDt::from_ymd_opt(2020, 2, 29).unwrap(),
-                &NDt::from_ymd_opt(2024, 2, 28).unwrap(),
+                NDt::from_ymd_opt(2020, 2, 29).unwrap(),
+                NDt::from_ymd_opt(2024, 2, 28).unwrap(),
             ),
             (
-                &NDt::from_ymd_opt(2015, 8, 30).unwrap(),
-                &NDt::from_ymd_opt(2010, 3, 31).unwrap(),
+                NDt::from_ymd_opt(2015, 8, 30).unwrap(),
+                NDt::from_ymd_opt(2010, 3, 31).unwrap(),
             ),
             (
-                &NDt::from_ymd_opt(2016, 2, 28).unwrap(),
-                &NDt::from_ymd_opt(2016, 10, 30).unwrap(),
+                NDt::from_ymd_opt(2016, 2, 28).unwrap(),
+                NDt::from_ymd_opt(2016, 10, 30).unwrap(),
             ),
             (
-                &NDt::from_ymd_opt(2014, 1, 31).unwrap(),
-                &NDt::from_ymd_opt(2014, 8, 31).unwrap(),
+                NDt::from_ymd_opt(2014, 1, 31).unwrap(),
+                NDt::from_ymd_opt(2014, 8, 31).unwrap(),
             ),
             (
-                &NDt::from_ymd_opt(2014, 2, 28).unwrap(),
-                &NDt::from_ymd_opt(2014, 9, 30).unwrap(),
+                NDt::from_ymd_opt(2014, 2, 28).unwrap(),
+                NDt::from_ymd_opt(2014, 9, 30).unwrap(),
             ),
             (
-                &NDt::from_ymd_opt(2016, 2, 29).unwrap(),
-                &NDt::from_ymd_opt(2016, 6, 15).unwrap(),
+                NDt::from_ymd_opt(2016, 2, 29).unwrap(),
+                NDt::from_ymd_opt(2016, 6, 15).unwrap(),
             ),
         ]
         .iter()
-        .map(|(&dt0, &dt1)| {
+        .map(|(dt0, dt1)| {
             (
-                yearfrac(dt0, dt1, US30360),
-                yearfrac(dt0, dt1, ACTACT),
-                yearfrac(dt0, dt1, ACT360),
-                yearfrac(dt0, dt1, ACT365),
-                yearfrac(dt0, dt1, EU30360),
+                yearfrac(*dt0, *dt1, US30360),
+                yearfrac(*dt0, *dt1, ACTACT),
+                yearfrac(*dt0, *dt1, ACT360),
+                yearfrac(*dt0, *dt1, ACT365),
+                yearfrac(*dt0, *dt1, EU30360),
             )
         })
         .collect::<Vec<_>>();
@@ -598,7 +604,7 @@ mod base_fn {
         assert_eq!(newt_raph(|x| (x - 3.0) * (x - 4.0), 2.0, 1e-6), Some(3.0));
         assert_eq!(
             newt_raph(|x| (x - 4.0).powf(2.0), 2.0, 1e-6),
-            Some(3.9999990972409805)
+            Some(4.000000028157636)
         );
         assert_eq!(newt_raph(|x| (x - 4.0).powf(2.0) + 5.0, 2.0, 1e-6), None);
         assert!(approx(1.0e+7, 10_000_000.05));
@@ -616,7 +622,7 @@ mod base_fn {
                 &vec![0.125, 0.29760274, 0.49760274, 0.55239726, 0.812671233],
                 &vec![-10.25, -2.5, 3.5, 9.5, 1.25]
             ),
-            Some(0.31813386475187844)
+            Some(0.3181338647519102)
         );
         assert_eq!(
             irr(

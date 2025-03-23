@@ -809,17 +809,20 @@ fn calc_elem<T: Hash + Ord + Copy>(hm: &HashMap<T, f64>, x: &Vec<T>, y: &Vec<T>)
     cal(x) - cal(y)
 }
 
+fn finmap_add<T: Hash + Ord + Copy>(p: f64, z: &T, hm: &mut HashMap<T, f64>) {
+    if p.abs() > 1e-5 {
+        hm.insert(*z, p);
+    } else {
+        hm.remove(z);
+    }
+}
+
 impl FinMaps for BsMap {
     type Key = BsType;
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in BALANCE_SHEET_MAP.iter() {
-            let p = calc_elem(self, d, b);
-            if p.abs() > 1e-5 {
-                self.insert(*k, p);
-            } else {
-                self.remove(k);
-            }
+            finmap_add(calc_elem(self, d, b), k, self);
         }
         self
     }
@@ -906,12 +909,7 @@ impl FinMaps for PlMap {
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in PROFIT_LOSS_MAP.iter() {
-            let p = calc_elem(self, d, b);
-            if p.abs() > 1e-5 {
-                self.insert(*k, p);
-            } else {
-                self.remove(k);
-            }
+            finmap_add(calc_elem(self, d, b), k, self);
         }
         self
     }
@@ -986,16 +984,10 @@ pub fn calc_cash_flow(
 ) -> CfMap {
     let mut cf = CfMap::new();
     for (k, (d, b)) in CASH_FLOW_PROFIT_LOSS.iter() {
-        let elem = calc_elem(pl, d, b);
-        if elem.abs() > 1e-5 {
-            cf.insert(*k, elem);
-        }
+        finmap_add(calc_elem(pl, d, b), k, &mut cf);
     }
     for (k, (d, b)) in CASH_FLOW_BALANCE_SHEET.iter() {
-        let elem = calc_elem(b1, d, b) - calc_elem(b0, d, b);
-        if elem.abs() > 1e-5 {
-            cf.insert(*k, elem);
-        }
+        finmap_add(calc_elem(b1, d, b) - calc_elem(b0, d, b), k, &mut cf);
     }
 
     let intr = cf.get(&CashFlowInterests).unwrap_or(&0.0);
@@ -1015,12 +1007,7 @@ impl FinMaps for CfMap {
 
     fn calc_elements(&mut self) -> &mut Self {
         for (k, (d, b)) in CASH_FLOW_MAP.iter() {
-            let p = calc_elem(self, d, b);
-            if p.abs() > 1e-5 {
-                self.insert(*k, p);
-            } else {
-                self.remove(k);
-            }
+            finmap_add(calc_elem(self, d, b), k, self);
         }
         self
     }
